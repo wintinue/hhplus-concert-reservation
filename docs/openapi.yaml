@@ -223,7 +223,7 @@ paths:
   /api/v1/reservations:
     post:
       tags: [Reservation]
-      summary: 예약 확정 (결제 성공 이후)
+      summary: 예약 생성 (결제 전 상태)
       operationId: createReservation
       security:
         - bearerAuth: []
@@ -414,6 +414,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
+          description: 포인트 부족
           $ref: "#/components/responses/Conflict"
         "410":
           $ref: "#/components/responses/QueueTokenExpired"
@@ -478,7 +479,7 @@ components:
       name: X-Queue-Token
       in: header
       required: true
-      description: 대기열 진입 권한이 부여된 사용자 토큰
+      description: 대기열 진입 권한/만료 검증 전용 토큰 (선택 상태 업데이트에 사용하지 않음)
       schema:
         type: string
 
@@ -657,7 +658,7 @@ components:
           properties:
             queueStatus:
               type: string
-              enum: [WAITING, READY, CLOSED]
+              enum: [WAITING, ADMITTED, IN_PROGRESS, EXPIRED, CANCELED, BLOCKED]
             retryAfterSeconds:
               type: integer
               minimum: 1
@@ -824,7 +825,7 @@ components:
           format: int64
         status:
           type: string
-          enum: [AVAILABLE, HELD, SOLD]
+          enum: [AVAILABLE, HELD, SOLD, CANCELED]
 
     SeatListResponse:
       type: object
@@ -850,10 +851,8 @@ components:
       properties:
         queueToken:
           type: string
+          description: 입장 권한을 나타내는 불변 토큰 식별자
         concertId:
-          type: integer
-          format: int64
-        scheduleId:
           type: integer
           format: int64
         queueNumber:
@@ -861,7 +860,7 @@ components:
           minimum: 1
         queueStatus:
           type: string
-          enum: [WAITING, READY, EXPIRED]
+          enum: [WAITING, ADMITTED, IN_PROGRESS, EXPIRED, CANCELED, BLOCKED]
         issuedAt:
           type: string
           format: date-time
@@ -880,9 +879,6 @@ components:
         queueToken:
           type: string
         concertId:
-          type: integer
-          format: int64
-        scheduleId:
           type: integer
           format: int64
         queueNumber:
@@ -907,9 +903,10 @@ components:
           description: 현재 시점 기준 예상 남은 대기 시간
         queueStatus:
           type: string
-          enum: [WAITING, READY, EXPIRED]
+          enum: [WAITING, ADMITTED, IN_PROGRESS, EXPIRED, CANCELED, BLOCKED]
         canReserve:
           type: boolean
+          description: queueStatus가 ADMITTED 또는 IN_PROGRESS인 경우 true
         tokenExpiresAt:
           type: string
           format: date-time
