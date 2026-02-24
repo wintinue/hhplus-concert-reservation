@@ -1,10 +1,12 @@
 ## 콘서트 예약 서비스
 
-## Step 02 산출물
+## 설계서
 
 - API 명세서: [`docs/openapi.yaml`](docs/openapi.yaml)
 - ERD: [`docs/erd.md`](docs/erd.md)
 - 인프라 구성도: [`docs/infra.md`](docs/infra.md)
+- 서비스 시퀀스 다이어그램: [`docs/service-sequence.md`](docs/service-sequence.md)
+- 상태 종류별 상태 시퀀스/전이 규칙: [`docs/status-sequences.md`](docs/status-sequences.md)
 
 ## Getting Started
 
@@ -20,7 +22,7 @@ docker-compose up -d
 
 
 ---
-개발환경
+## 개발환경
 - Kotlin + Spring Boot 기반 백엔드 API 서버 
 - 빌드: Gradle Wrapper (8.11.1)
 - 런타임 타깃: Java 17 (Toolchain 고정)
