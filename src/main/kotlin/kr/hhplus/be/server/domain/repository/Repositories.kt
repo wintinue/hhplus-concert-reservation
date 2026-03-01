@@ -73,9 +73,16 @@ interface QueueTokenRepository : JpaRepository<QueueTokenEntity, String> {
 }
 
 interface SeatHoldRepository : JpaRepository<SeatHoldEntity, String>
+{
+    @Query("select h from SeatHoldEntity h where h.holdStatus = :status and h.holdExpiresAt < :now")
+    fun findExpiredHolds(@Param("status") status: HoldStatus, @Param("now") now: LocalDateTime): List<SeatHoldEntity>
+}
 
 interface SeatHoldItemRepository : JpaRepository<SeatHoldItemEntity, Long> {
     fun findByHoldHoldId(holdId: String): List<SeatHoldItemEntity>
+
+    @Query("select i.seat.id from SeatHoldItemEntity i where i.hold.holdId = :holdId")
+    fun findSeatIdsByHoldId(@Param("holdId") holdId: String): List<Long>
 }
 
 interface ReservationRepository : JpaRepository<ReservationEntity, Long> {
@@ -86,10 +93,19 @@ interface ReservationRepository : JpaRepository<ReservationEntity, Long> {
     fun findByIdForUpdate(@Param("reservationId") reservationId: Long): ReservationEntity?
 
     fun existsByHoldHoldId(holdId: String): Boolean
+
+    @Query("select r from ReservationEntity r where r.hold.holdId = :holdId and r.reservationStatus = :status")
+    fun findByHoldIdAndStatus(@Param("holdId") holdId: String, @Param("status") status: ReservationStatus): ReservationEntity?
+
+    @Query("select r from ReservationEntity r where r.reservationStatus = :status and r.hold.holdExpiresAt < :now")
+    fun findExpiredPendingReservations(@Param("status") status: ReservationStatus, @Param("now") now: LocalDateTime): List<ReservationEntity>
 }
 
 interface ReservationItemRepository : JpaRepository<ReservationItemEntity, Long> {
     fun findByReservationId(reservationId: Long): List<ReservationItemEntity>
+
+    @Query("select i.seat.id from ReservationItemEntity i where i.reservation.id = :reservationId")
+    fun findSeatIdsByReservationId(@Param("reservationId") reservationId: Long): List<Long>
 }
 
 interface UserPointRepository : JpaRepository<UserPointEntity, Long> {

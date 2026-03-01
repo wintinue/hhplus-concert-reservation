@@ -57,7 +57,7 @@ class ConcertFacadeService(
         )
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     fun getSchedules(user: UserEntity, concertId: Long, queueToken: String): ScheduleListResponse {
         holdPort.expireActiveHolds(LocalDateTime.now(clock))
         reservationPort.expirePendingReservations(LocalDateTime.now(clock))
@@ -77,7 +77,7 @@ class ConcertFacadeService(
         )
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     fun getSeats(user: UserEntity, scheduleId: Long, queueToken: String): SeatListResponse {
         holdPort.expireActiveHolds(LocalDateTime.now(clock))
         reservationPort.expirePendingReservations(LocalDateTime.now(clock))

@@ -16,7 +16,7 @@ spring:
     generate-ddl: true
     show-sql: false
     hibernate:
-      ddl-auto: update
+      ddl-auto: update # TODO: 나중에 none으로 수정 필요
     properties:
       hibernate.timezone.default_storage: NORMALIZE_UTC
       hibernate.jdbc.time_zone: UTC

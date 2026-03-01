@@ -17,9 +17,11 @@ import java.time.LocalDateTime
     name = "queue_tokens",
     indexes = [
         Index(name = "idx_queue_concert_status_number", columnList = "concert_id, queue_status, queue_number"),
-        Index(name = "idx_queue_user_concert", columnList = "user_id, concert_id"),
+        Index(name = "idx_queue_user_concert", columnList = "user_id, concert_id, queue_status"),
     ],
 )
+// TODO: 활성 상태만 대상으로 한 유니크 보장은 아직 DB 제약으로 닫지 않았다.
+// 후속 고도화 시 active_slot 기반 유니크 또는 활성/이력 테이블 분리를 검토한다.
 class QueueTokenEntity(
     @Id
     @Column(name = "queue_token", length = 120)

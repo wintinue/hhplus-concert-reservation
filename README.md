@@ -1,30 +1,63 @@
-## 콘서트 예약 서비스
+## Concert Reservation Service
 
-## 설계서
+## Design Docs
 
-- API 명세서: [`docs/openapi.yaml`](docs/openapi.yaml)
+- API Specification: [`docs/openapi.yaml`](docs/openapi.yaml)
 - ERD: [`docs/erd.md`](docs/erd.md)
-- 인프라 구성도: [`docs/infra.md`](docs/infra.md)
-- 서비스 시퀀스 다이어그램: [`docs/service-sequence.md`](docs/service-sequence.md)
-- 상태 종류별 상태 시퀀스/전이 규칙: [`docs/status-sequences.md`](docs/status-sequences.md)
+- Infrastructure Diagram: [`docs/infra.md`](docs/infra.md)
+- Service Sequence Diagram: [`docs/service-sequence.md`](docs/service-sequence.md)
+- Status Sequence and Transition Rules: [`docs/status-sequences.md`](docs/status-sequences.md)
+- Database Analysis Report: [`docs/advanced-db-report.md`](docs/advanced-db-report.md)
 
 ## Getting Started
 
+### Overview
+
+- Backend API server built with Kotlin and Spring Boot
+- Build tool: Gradle Wrapper (8.11.1)
+- Runtime target: Java 17 (toolchain fixed)
+- Local database: MySQL 8 via `docker-compose`
+- Test stack: JUnit5, Spring Boot Test, and Testcontainers(MySQL)
+
 ### Prerequisites
 
-#### Running Docker Containers
+- Java 17
+- Docker / Docker Compose
 
-`local` profile 로 실행하기 위하여 인프라가 설정되어 있는 Docker 컨테이너를 실행해주셔야 합니다.
+### Quick Start
+
+#### 1. Start Infrastructure
+
+Run the Docker containers required for the `local` profile.
 
 ```bash
 docker-compose up -d
 ```
 
+#### 2. Start Spring Server
 
----
-## 개발환경
-- Kotlin + Spring Boot 기반 백엔드 API 서버 
-- 빌드: Gradle Wrapper (8.11.1)
-- 런타임 타깃: Java 17 (Toolchain 고정)
-- 로컬 DB: MySQL 8 (docker-compose)
-- 테스트: JUnit5 + Spring Boot Test + Testcontainers(MySQL)
+The default active profile is `local`. Start the Spring server after the local MySQL container is running.
+
+```bash
+./gradlew bootRun
+```
+
+On Windows, use:
+
+```bash
+gradlew.bat bootRun
+```
+
+The application runs on `http://localhost:8080` by default.
+
+You can also verify the server with the actuator endpoint:
+
+```text
+http://localhost:8080/actuator
+```
+
+#### 3. Run Tests
+
+```bash
+./gradlew test
+```

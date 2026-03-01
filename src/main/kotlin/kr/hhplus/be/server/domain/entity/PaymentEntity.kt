@@ -7,15 +7,23 @@ import jakarta.persistence.Enumerated
 import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
+import jakarta.persistence.Index
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
 import kr.hhplus.be.server.domain.enums.PaymentMethod
 import kr.hhplus.be.server.domain.enums.PaymentStatus
+import org.hibernate.annotations.Check
 import java.time.LocalDateTime
 
 @Entity
-@Table(name = "payments")
+@Table(
+    name = "payments",
+    indexes = [
+        Index(name = "idx_payments_reservation", columnList = "reservation_id"),
+    ],
+)
+@Check(constraints = "amount >= 0")
 class PaymentEntity(
     @ManyToOne(optional = false)
     @JoinColumn(name = "reservation_id")

@@ -7,6 +7,7 @@ import jakarta.persistence.Enumerated
 import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
+import jakarta.persistence.Index
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
@@ -14,7 +15,12 @@ import kr.hhplus.be.server.domain.enums.ScheduleStatus
 import java.time.LocalDateTime
 
 @Entity
-@Table(name = "concert_schedules")
+@Table(
+    name = "concert_schedules",
+    indexes = [
+        Index(name = "idx_schedules_concert_start", columnList = "concert_id, start_at"),
+    ],
+)
 class ConcertScheduleEntity(
     @ManyToOne(optional = false)
     @JoinColumn(name = "concert_id")

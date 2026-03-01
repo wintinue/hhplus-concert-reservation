@@ -7,20 +7,26 @@ import jakarta.persistence.Enumerated
 import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
+import jakarta.persistence.Index
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
 import jakarta.persistence.UniqueConstraint
 import kr.hhplus.be.server.domain.enums.ReservationStatus
+import org.hibernate.annotations.Check
 import java.time.LocalDateTime
 
 @Entity
 @Table(
     name = "reservations",
+    indexes = [
+        Index(name = "idx_reservations_user_created", columnList = "user_id, created_at"),
+    ],
     uniqueConstraints = [
         UniqueConstraint(name = "uk_reservations_hold_id", columnNames = ["hold_id"]),
     ],
 )
+@Check(constraints = "total_amount >= 0")
 class ReservationEntity(
     @ManyToOne(optional = false)
     @JoinColumn(name = "user_id")
