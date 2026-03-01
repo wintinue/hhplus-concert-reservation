@@ -125,13 +125,19 @@ class ReservationPersistenceAdapter(
         return hold.toSnapshot(seatIds)
     }
 
+    override fun getHoldForUpdate(holdId: String): HoldSnapshot? {
+        val hold = seatHoldRepository.findByIdForUpdate(holdId) ?: return null
+        val seatIds = seatHoldItemRepository.findSeatIdsByHoldId(holdId)
+        return hold.toSnapshot(seatIds)
+    }
+
     override fun markHoldConfirmed(holdId: String) {
-        val hold = seatHoldRepository.findById(holdId).orElseThrow { NotFoundException("HOLD", holdId) }
+        val hold = seatHoldRepository.findByIdForUpdate(holdId) ?: throw NotFoundException("HOLD", holdId)
         hold.holdStatus = HoldStatus.CONFIRMED
     }
 
     override fun markHoldExpired(holdId: String) {
-        val hold = seatHoldRepository.findById(holdId).orElseThrow { NotFoundException("HOLD", holdId) }
+        val hold = seatHoldRepository.findByIdForUpdate(holdId) ?: throw NotFoundException("HOLD", holdId)
         hold.holdStatus = HoldStatus.EXPIRED
     }
 
