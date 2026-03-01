@@ -1,0 +1,1100 @@
+openapi: 3.1.0
+info:
+  title: Concert Reservation API
+  version: 0.1.0
+  description: |
+    항해 플러스 콘서트 예약 서비스 API 명세
+servers:
+  - url: http://localhost:8080
+    description: local
+tags:
+  - name: Auth
+  - name: Concert
+  - name: Queue
+  - name: Reservation
+  - name: Point
+  - name: Payment
+paths:
+  /api/v1/auth/signup:
+    post:
+      tags: [Auth]
+      summary: 회원 가입
+      operationId: signup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignUpRequest"
+      responses:
+        "201":
+          description: 생성 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthTokenResponse"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: 로그인
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: 로그인 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthTokenResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/concerts:
+    get:
+      tags: [Concert]
+      summary: 콘서트 목록 조회
+      operationId: getConcerts
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConcertListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/concerts/{concertId}/schedules:
+    get:
+      tags: [Concert]
+      summary: 콘서트 회차 조회
+      operationId: getConcertSchedules
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ConcertId"
+        - $ref: "#/components/parameters/QueueTokenHeader"
+      responses:
+        "200":
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduleListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/QueueTokenExpired"
+        "423":
+          $ref: "#/components/responses/QueueNotReady"
+
+  /api/v1/schedules/{scheduleId}/seats:
+    get:
+      tags: [Concert]
+      summary: 좌석 현황 조회
+      operationId: getSeats
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ScheduleId"
+        - $ref: "#/components/parameters/QueueTokenHeader"
+      responses:
+        "200":
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SeatListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/QueueTokenExpired"
+        "423":
+          $ref: "#/components/responses/QueueNotReady"
+
+  /api/v1/queue/tokens:
+    post:
+      tags: [Queue]
+      summary: 대기열 토큰 발급
+      operationId: issueQueueToken
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QueueTokenIssueRequest"
+      responses:
+        "201":
+          description: 발급 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueueTokenIssueResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/QueueAlreadyIssuedConflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/v1/queue/tokens/{queueToken}:
+    get:
+      tags: [Queue]
+      summary: 대기번호/진입 가능 여부 조회
+      operationId: getQueuePosition
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/QueueToken"
+      responses:
+        "200":
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueuePositionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/QueueTokenExpired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/v1/reservations/holds:
+    post:
+      tags: [Reservation]
+      summary: 좌석 선점 (임시 배정)
+      operationId: holdSeats
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/QueueTokenHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HoldSeatRequest"
+      responses:
+        "201":
+          description: 선점 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HoldSeatResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/SeatConflict"
+        "410":
+          $ref: "#/components/responses/QueueTokenExpired"
+        "423":
+          $ref: "#/components/responses/QueueNotReady"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/v1/reservations:
+    post:
+      tags: [Reservation]
+      summary: 예약 생성 (결제 전 상태)
+      operationId: createReservation
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/QueueTokenHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReservationRequest"
+      responses:
+        "201":
+          description: 예약 완료
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReservationResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/HoldExpiredConflict"
+        "410":
+          $ref: "#/components/responses/QueueTokenExpired"
+        "423":
+          $ref: "#/components/responses/QueueNotReady"
+
+    get:
+      tags: [Reservation]
+      summary: 내 예약 목록 조회
+      operationId: getMyReservations
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/QueueTokenHeader"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
+      responses:
+        "200":
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReservationListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "410":
+          $ref: "#/components/responses/QueueTokenExpired"
+        "423":
+          $ref: "#/components/responses/QueueNotReady"
+
+  /api/v1/reservations/{reservationId}:
+    get:
+      tags: [Reservation]
+      summary: 예약 상세 조회
+      operationId: getReservation
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ReservationId"
+        - $ref: "#/components/parameters/QueueTokenHeader"
+      responses:
+        "200":
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReservationResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/QueueTokenExpired"
+        "423":
+          $ref: "#/components/responses/QueueNotReady"
+    patch:
+      tags: [Reservation]
+      summary: 예약 상태 변경 (취소)
+      operationId: cancelReservation
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ReservationId"
+        - $ref: "#/components/parameters/QueueTokenHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelReservationRequest"
+      responses:
+        "200":
+          description: 취소 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReservationResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "410":
+          $ref: "#/components/responses/QueueTokenExpired"
+        "423":
+          $ref: "#/components/responses/QueueNotReady"
+
+  /api/v1/users/me/points:
+    get:
+      tags: [Point]
+      summary: 내 포인트 조회
+      operationId: getMyPoints
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PointBalanceResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/users/me/points/charges:
+    post:
+      tags: [Point]
+      summary: 내 포인트 충전
+      operationId: chargeMyPoints
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PointChargeRequest"
+      responses:
+        "201":
+          description: 충전 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PointChargeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /api/v1/payments:
+    post:
+      tags: [Payment]
+      summary: 결제 요청
+      operationId: payReservation
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/QueueTokenHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentRequest"
+      responses:
+        "201":
+          description: 결제 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: 포인트 부족
+          $ref: "#/components/responses/Conflict"
+        "410":
+          $ref: "#/components/responses/QueueTokenExpired"
+        "423":
+          $ref: "#/components/responses/QueueNotReady"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    Size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    ConcertId:
+      name: concertId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    ScheduleId:
+      name: scheduleId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    ReservationId:
+      name: reservationId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    QueueToken:
+      name: queueToken
+      in: path
+      required: true
+      schema:
+        type: string
+    QueueTokenHeader:
+      name: X-Queue-Token
+      in: header
+      required: true
+      description: 대기열 진입 권한/만료 검증 전용 토큰 (선택 상태 업데이트에 사용하지 않음)
+      schema:
+        type: string
+
+  responses:
+    Unauthorized:
+      description: 인증 실패
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/UnauthorizedErrorResponse"
+    Forbidden:
+      description: 권한 없음
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ForbiddenErrorResponse"
+    NotFound:
+      description: 리소스 없음
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/NotFoundErrorResponse"
+    Conflict:
+      description: 상태 충돌
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ConflictErrorResponse"
+    ValidationError:
+      description: 유효성 오류
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ValidationErrorResponse"
+    SeatConflict:
+      description: 이미 선점/판매된 좌석 포함
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/SeatConflictErrorResponse"
+    HoldExpiredConflict:
+      description: 선점 만료 또는 유효하지 않은 선점
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/HoldExpiredErrorResponse"
+    QueueAlreadyIssuedConflict:
+      description: 이미 유효한 대기열 토큰 보유
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/QueueConflictErrorResponse"
+    QueueNotReady:
+      description: 아직 예약 가능 순번이 아님
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/QueueErrorResponse"
+    QueueTokenExpired:
+      description: 대기열 토큰 만료
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/QueueTokenExpiredErrorResponse"
+    TooManyRequests:
+      description: 요청 제한 초과
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: 재시도까지 대기할 초(second)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/RateLimitErrorResponse"
+
+  schemas:
+    BaseErrorResponse:
+      type: object
+      required: [code, message, timestamp]
+      properties:
+        code:
+          type: string
+          example: RESERVATION_CONFLICT
+        message:
+          type: string
+          example: 이미 판매된 좌석이 포함되어 있습니다.
+        timestamp:
+          type: string
+          format: date-time
+
+    UnauthorizedErrorResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseErrorResponse"
+        - type: object
+          required: [authType]
+          properties:
+            authType:
+              type: string
+              example: BEARER
+
+    ForbiddenErrorResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseErrorResponse"
+        - type: object
+          required: [reason]
+          properties:
+            reason:
+              type: string
+              example: RESOURCE_OWNER_MISMATCH
+
+    NotFoundErrorResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseErrorResponse"
+        - type: object
+          required: [resource]
+          properties:
+            resource:
+              type: string
+              example: SCHEDULE
+            resourceId:
+              type: string
+              example: "123"
+
+    ConflictErrorResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseErrorResponse"
+        - type: object
+          required: [conflictType, retryable]
+          properties:
+            conflictType:
+              type: string
+              example: RESERVATION_STATE
+            retryable:
+              type: boolean
+              example: false
+
+    SeatConflictErrorResponse:
+      allOf:
+        - $ref: "#/components/schemas/ConflictErrorResponse"
+        - type: object
+          required: [unavailableSeatIds]
+          properties:
+            unavailableSeatIds:
+              type: array
+              items:
+                type: integer
+                format: int64
+
+    HoldExpiredErrorResponse:
+      allOf:
+        - $ref: "#/components/schemas/ConflictErrorResponse"
+        - type: object
+          required: [holdId, holdExpiredAt]
+          properties:
+            holdId:
+              type: string
+            holdExpiredAt:
+              type: string
+              format: date-time
+
+    QueueConflictErrorResponse:
+      allOf:
+        - $ref: "#/components/schemas/ConflictErrorResponse"
+        - type: object
+          required: [activeQueueToken]
+          properties:
+            activeQueueToken:
+              type: string
+
+    QueueErrorResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseErrorResponse"
+        - type: object
+          required: [queueStatus, retryAfterSeconds]
+          properties:
+            queueStatus:
+              type: string
+              enum: [WAITING, ADMITTED, IN_PROGRESS, EXPIRED, CANCELED, BLOCKED]
+            retryAfterSeconds:
+              type: integer
+              minimum: 1
+            nextPollingAt:
+              type: string
+              format: date-time
+
+    QueueTokenExpiredErrorResponse:
+      allOf:
+        - $ref: "#/components/schemas/QueueErrorResponse"
+        - type: object
+          required: [expiredAt]
+          properties:
+            expiredAt:
+              type: string
+              format: date-time
+
+    RateLimitErrorResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseErrorResponse"
+        - type: object
+          required: [retryAfterSeconds]
+          properties:
+            retryAfterSeconds:
+              type: integer
+              minimum: 1
+            limit:
+              type: integer
+            remaining:
+              type: integer
+
+    ValidationErrorResponse:
+      allOf:
+        - $ref: "#/components/schemas/BaseErrorResponse"
+        - type: object
+          required: [errors]
+          properties:
+            errors:
+              type: array
+              items:
+                $ref: "#/components/schemas/FieldValidationError"
+
+    FieldValidationError:
+      type: object
+      required: [field, reason]
+      properties:
+        field:
+          type: string
+          example: seatIds
+        reason:
+          type: string
+          example: must not be empty
+
+    SignUpRequest:
+      type: object
+      required: [name, email, password]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+          maxLength: 100
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthTokenResponse:
+      type: object
+      required: [accessToken, expiresIn]
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+            type: string
+        expiresIn:
+          type: integer
+          example: 3600
+
+    ConcertSummary:
+      type: object
+      required: [concertId, title, venueName, bookingOpenAt, bookingCloseAt]
+      properties:
+        concertId:
+          type: integer
+          format: int64
+        title:
+          type: string
+        venueName:
+          type: string
+        bookingOpenAt:
+          type: string
+          format: date-time
+        bookingCloseAt:
+          type: string
+          format: date-time
+
+    ConcertListResponse:
+      type: object
+      required: [items, page, size, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConcertSummary"
+        page:
+          type: integer
+        size:
+          type: integer
+        total:
+          type: integer
+
+    ScheduleSummary:
+      type: object
+      required: [scheduleId, startAt]
+      properties:
+        scheduleId:
+          type: integer
+          format: int64
+        startAt:
+          type: string
+          format: date-time
+        totalSeat:
+          type: integer
+        availableSeat:
+          type: integer
+
+    ScheduleListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScheduleSummary"
+
+    SeatSummary:
+      type: object
+      required: [seatId, section, row, number, price, status]
+      properties:
+        seatId:
+          type: integer
+          format: int64
+        section:
+          type: string
+        row:
+          type: string
+        number:
+          type: string
+        price:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum: [AVAILABLE, HELD, SOLD, CANCELED]
+
+    SeatListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SeatSummary"
+
+    QueueTokenIssueRequest:
+      type: object
+      required: [concertId]
+      properties:
+        concertId:
+          type: integer
+          format: int64
+
+    QueueTokenIssueResponse:
+      type: object
+      required:
+        [queueToken, concertId, queueNumber, queueStatus, issuedAt, expiresAt, pollingIntervalSeconds]
+      properties:
+        queueToken:
+          type: string
+          description: 입장 권한을 나타내는 불변 토큰 식별자
+        concertId:
+          type: integer
+          format: int64
+        queueNumber:
+          type: integer
+          minimum: 1
+        queueStatus:
+          type: string
+          enum: [WAITING, ADMITTED, IN_PROGRESS, EXPIRED, CANCELED, BLOCKED]
+        issuedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        pollingIntervalSeconds:
+          type: integer
+          minimum: 1
+
+    QueuePositionResponse:
+      type: object
+      required:
+        [queueToken, concertId, queueNumber, currentPosition, aheadCount, totalWaitingCount, queueStatus, canReserve, refreshedAt, tokenRemainingSeconds, remainingWaitSeconds]
+      properties:
+        queueToken:
+          type: string
+        concertId:
+          type: integer
+          format: int64
+        queueNumber:
+          type: integer
+          minimum: 1
+        currentPosition:
+          type: integer
+          minimum: 1
+          description: 현재 대기열 내 순번(1이면 즉시 진입 가능)
+        aheadCount:
+          type: integer
+          minimum: 0
+        totalWaitingCount:
+          type: integer
+          minimum: 0
+        estimatedWaitSeconds:
+          type: integer
+          minimum: 0
+        remainingWaitSeconds:
+          type: integer
+          minimum: 0
+          description: 현재 시점 기준 예상 남은 대기 시간
+        queueStatus:
+          type: string
+          enum: [WAITING, ADMITTED, IN_PROGRESS, EXPIRED, CANCELED, BLOCKED]
+        canReserve:
+          type: boolean
+          description: queueStatus가 ADMITTED 또는 IN_PROGRESS인 경우 true
+        tokenExpiresAt:
+          type: string
+          format: date-time
+        tokenRemainingSeconds:
+          type: integer
+          minimum: 0
+        reservationWindowExpiresAt:
+          type: string
+          format: date-time
+        reservationWindowRemainingSeconds:
+          type: integer
+          minimum: 0
+        refreshedAt:
+          type: string
+          format: date-time
+
+    HoldSeatRequest:
+      type: object
+      required: [scheduleId, seatIds]
+      properties:
+        scheduleId:
+          type: integer
+          format: int64
+        seatIds:
+          type: array
+          minItems: 1
+          items:
+            type: integer
+            format: int64
+
+    HoldSeatResponse:
+      type: object
+      required: [holdId, holdExpiresAt, queueToken, seatIds, totalAmount]
+      properties:
+        holdId:
+          type: string
+          description: "선점 토큰(예: Redis key)"
+        holdExpiresAt:
+          type: string
+          format: date-time
+        queueToken:
+          type: string
+          description: 예약 진입에 사용된 대기열 토큰
+        seatIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+        totalAmount:
+          type: integer
+          format: int64
+
+    CreateReservationRequest:
+      type: object
+      required: [holdId]
+      properties:
+        holdId:
+          type: string
+
+    CancelReservationRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [CANCELED]
+        reason:
+          type: string
+          maxLength: 200
+
+    ReservationResponse:
+      type: object
+      required:
+        [reservationId, userId, scheduleId, seatIds, totalAmount, status, createdAt]
+      properties:
+        reservationId:
+          type: integer
+          format: int64
+        userId:
+          type: integer
+          format: int64
+        scheduleId:
+          type: integer
+          format: int64
+        seatIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+        totalAmount:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum: [PENDING_PAYMENT, CONFIRMED, CANCELED, EXPIRED]
+        createdAt:
+          type: string
+          format: date-time
+
+    ReservationListResponse:
+      type: object
+      required: [items, page, size, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReservationResponse"
+        page:
+          type: integer
+        size:
+          type: integer
+        total:
+          type: integer
+
+    PointChargeRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount:
+          type: integer
+          format: int64
+          minimum: 1
+
+    PointBalanceResponse:
+      type: object
+      required: [userId, balance, updatedAt]
+      properties:
+        userId:
+          type: integer
+          format: int64
+        balance:
+          type: integer
+          format: int64
+          minimum: 0
+        updatedAt:
+          type: string
+          format: date-time
+
+    PointChargeResponse:
+      type: object
+      required: [transactionId, userId, chargedAmount, balanceAfter, chargedAt]
+      properties:
+        transactionId:
+          type: string
+        userId:
+          type: integer
+          format: int64
+        chargedAmount:
+          type: integer
+          format: int64
+        balanceAfter:
+          type: integer
+          format: int64
+          minimum: 0
+        chargedAt:
+          type: string
+          format: date-time
+
+    PaymentRequest:
+      type: object
+      required: [reservationId, amount, method]
+      properties:
+        reservationId:
+          type: integer
+          format: int64
+        amount:
+          type: integer
+          format: int64
+        method:
+          type: string
+          enum: [CARD, BANK_TRANSFER, SIMPLE_PAY]
+
+    PaymentResponse:
+      type: object
+      required: [paymentId, reservationId, amount, status, paidAt]
+      properties:
+        paymentId:
+          type: integer
+          format: int64
+        reservationId:
+          type: integer
+          format: int64
+        amount:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum: [SUCCESS, FAILED, CANCELED]
+        paidAt:
+          type: string
+          format: date-time
