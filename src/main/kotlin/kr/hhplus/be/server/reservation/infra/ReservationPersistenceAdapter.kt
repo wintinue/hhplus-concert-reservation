@@ -89,11 +89,11 @@ class ReservationPersistenceAdapter(
     }
 
     override fun expireActiveHolds(now: LocalDateTime) {
-        seatHoldRepository.findAll()
-            .filter { it.holdStatus == HoldStatus.ACTIVE && it.holdExpiresAt.isBefore(now) }
+        // TODO: 현재는 MySQL 만료 스캔으로 hold를 정리한다. 문서의 목표 아키텍처에 맞추려면 추후 Redis TTL 기반 hold 관리로 전환이 필요하다.
+        seatHoldRepository.findExpiredHolds(HoldStatus.ACTIVE, now)
             .forEach { hold ->
                 hold.holdStatus = HoldStatus.EXPIRED
-                val seatIds = seatHoldItemRepository.findByHoldHoldId(hold.holdId).map { it.seat.id!! }
+                val seatIds = seatHoldItemRepository.findSeatIdsByHoldId(hold.holdId)
                 markSeatsAvailable(seatIds)
                 markReservationExpiredByHold(hold.holdId, now)
             }
@@ -121,7 +121,7 @@ class ReservationPersistenceAdapter(
 
     override fun getHold(holdId: String): HoldSnapshot? {
         val hold = seatHoldRepository.findById(holdId).orElse(null) ?: return null
-        val seatIds = seatHoldItemRepository.findByHoldHoldId(holdId).map { it.seat.id!! }
+        val seatIds = seatHoldItemRepository.findSeatIdsByHoldId(holdId)
         return hold.toSnapshot(seatIds)
     }
 
@@ -159,16 +159,16 @@ class ReservationPersistenceAdapter(
     }
 
     override fun getReservation(reservationId: Long): ReservationSnapshot? =
-        reservationRepository.findById(reservationId).orElse(null)?.let { it.toSnapshot(reservationItemRepository.findByReservationId(reservationId).map { item -> item.seat.id!! }) }
+        reservationRepository.findById(reservationId).orElse(null)?.let { it.toSnapshot(reservationItemRepository.findSeatIdsByReservationId(reservationId)) }
 
     override fun getReservationForUpdate(reservationId: Long): ReservationSnapshot? =
-        reservationRepository.findByIdForUpdate(reservationId)?.let { it.toSnapshot(reservationItemRepository.findByReservationId(reservationId).map { item -> item.seat.id!! }) }
+        reservationRepository.findByIdForUpdate(reservationId)?.let { it.toSnapshot(reservationItemRepository.findSeatIdsByReservationId(reservationId)) }
 
     override fun getReservations(userId: Long, page: Int, size: Int): ReservationListResponse {
         val result = reservationRepository.findByUserIdOrderByIdDesc(userId, PageRequest.of(page, size))
         return ReservationListResponse(
             items = result.content.map { reservation ->
-                reservation.toSnapshot(reservationItemRepository.findByReservationId(reservation.id!!).map { item -> item.seat.id!! }).toResponse()
+                reservation.toSnapshot(reservationItemRepository.findSeatIdsByReservationId(reservation.id!!)).toResponse()
             },
             page = result.number,
             size = result.size,
@@ -188,7 +188,7 @@ class ReservationPersistenceAdapter(
     }
 
     override fun markReservationExpiredByHold(holdId: String, expiredAt: LocalDateTime) {
-        val reservation = reservationRepository.findAll().firstOrNull { it.hold.holdId == holdId && it.reservationStatus == ReservationStatus.PENDING_PAYMENT }
+        val reservation = reservationRepository.findByHoldIdAndStatus(holdId, ReservationStatus.PENDING_PAYMENT)
         if (reservation != null) {
             reservation.reservationStatus = ReservationStatus.EXPIRED
             reservation.expiredAt = expiredAt
@@ -196,13 +196,12 @@ class ReservationPersistenceAdapter(
     }
 
     override fun expirePendingReservations(now: LocalDateTime) {
-        reservationRepository.findAll()
-            .filter { it.reservationStatus == ReservationStatus.PENDING_PAYMENT && it.hold.holdExpiresAt.isBefore(now) }
+        reservationRepository.findExpiredPendingReservations(ReservationStatus.PENDING_PAYMENT, now)
             .forEach { reservation ->
                 reservation.reservationStatus = ReservationStatus.EXPIRED
                 reservation.expiredAt = now
                 reservation.hold.holdStatus = HoldStatus.EXPIRED
-                val seatIds = reservationItemRepository.findByReservationId(reservation.id!!).map { it.seat.id!! }
+                val seatIds = reservationItemRepository.findSeatIdsByReservationId(reservation.id!!)
                 markSeatsAvailable(seatIds)
             }
     }

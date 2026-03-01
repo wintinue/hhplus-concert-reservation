@@ -25,6 +25,9 @@ class QueueService(
     private val queueTokenRepository: QueueTokenRepository,
     private val clock: Clock,
 ) {
+    // TODO: 현재는 MySQL + 애플리케이션 체크 + 락으로 활성 queue token 중복을 방지한다.
+    // 후속 고도화 시 active_slot 기반 유니크 또는 활성/이력 테이블 분리를 먼저 검토하고,
+    // Redis 대기열 전환은 그 다음 단계에서 고려한다.
     @Transactional
     fun issueToken(user: UserEntity, concertId: Long): QueueTokenIssueResponse {
         val concert = concertRepository.findByIdForUpdate(concertId) ?: throw NotFoundException("CONCERT", concertId)

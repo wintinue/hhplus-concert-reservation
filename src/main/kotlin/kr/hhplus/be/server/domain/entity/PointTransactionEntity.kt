@@ -5,14 +5,22 @@ import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
 import jakarta.persistence.Id
+import jakarta.persistence.Index
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
 import kr.hhplus.be.server.domain.enums.PointTransactionType
+import org.hibernate.annotations.Check
 import java.time.LocalDateTime
 
 @Entity
-@Table(name = "point_transactions")
+@Table(
+    name = "point_transactions",
+    indexes = [
+        Index(name = "idx_point_tx_user_created", columnList = "user_id, created_at"),
+    ],
+)
+@Check(constraints = "amount >= 0 and balance_after >= 0")
 class PointTransactionEntity(
     @Id
     @Column(name = "transaction_id", length = 120)

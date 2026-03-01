@@ -5,14 +5,22 @@ import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
 import jakarta.persistence.Id
+import jakarta.persistence.Index
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
 import kr.hhplus.be.server.domain.enums.HoldStatus
+import org.hibernate.annotations.Check
 import java.time.LocalDateTime
 
 @Entity
-@Table(name = "seat_holds")
+@Table(
+    name = "seat_holds",
+    indexes = [
+        Index(name = "idx_holds_expiry", columnList = "hold_expires_at"),
+    ],
+)
+@Check(constraints = "total_amount >= 0")
 class SeatHoldEntity(
     @Id
     @Column(name = "hold_id", length = 120)

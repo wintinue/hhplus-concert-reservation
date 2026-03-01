@@ -10,6 +10,7 @@ import kr.hhplus.be.server.common.NotFoundException
 import kr.hhplus.be.server.common.ValidationException
 import kr.hhplus.be.server.reservation.domain.ReservationSnapshot
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.time.Clock
 import java.time.LocalDateTime
 
@@ -21,6 +22,7 @@ class HoldSeatsUseCase(
     private val reservationPort: ReservationPort,
     private val clock: Clock,
 ) {
+    @Transactional
     fun execute(userId: Long, queueToken: String, scheduleId: Long, seatIds: List<Long>): HoldSeatResponse {
         val deduplicatedSeatIds = seatIds.distinct()
         if (deduplicatedSeatIds.isEmpty()) {
@@ -64,6 +66,7 @@ class CreateReservationUseCase(
     private val reservationPort: ReservationPort,
     private val clock: Clock,
 ) {
+    @Transactional
     fun execute(userId: Long, queueToken: String, holdId: String): ReservationResponse {
         val now = LocalDateTime.now(clock)
         holdPort.expireActiveHolds(now)
@@ -94,6 +97,7 @@ class GetReservationsUseCase(
     private val reservationPort: ReservationPort,
     private val clock: Clock,
 ) {
+    @Transactional
     fun execute(userId: Long, queueToken: String, page: Int, size: Int): ReservationListResponse {
         reservationPort.expirePendingReservations(LocalDateTime.now(clock))
         queuePort.validateForRead(queueToken, userId)
@@ -107,6 +111,7 @@ class GetReservationUseCase(
     private val reservationPort: ReservationPort,
     private val clock: Clock,
 ) {
+    @Transactional
     fun execute(userId: Long, queueToken: String, reservationId: Long): ReservationResponse {
         reservationPort.expirePendingReservations(LocalDateTime.now(clock))
         val reservation = reservationPort.getReservation(reservationId) ?: throw NotFoundException("RESERVATION", reservationId)
@@ -125,6 +130,7 @@ class CancelReservationUseCase(
     private val seatLoadPort: SeatLoadPort,
     private val clock: Clock,
 ) {
+    @Transactional
     fun execute(userId: Long, queueToken: String, reservationId: Long, status: String): ReservationResponse {
         val now = LocalDateTime.now(clock)
         reservationPort.expirePendingReservations(now)
@@ -137,6 +143,7 @@ class CancelReservationUseCase(
         if (reservation.status == "CANCELED") throw ConflictException("이미 취소된 예약입니다.", conflictType = "RESERVATION_STATE")
         if (reservation.status == "EXPIRED") throw ConflictException("만료된 예약은 취소할 수 없습니다.", conflictType = "RESERVATION_STATE")
 
+        // TODO: 문서 기준으로는 SOLD -> CANCELED 후 재판매 정책에 따라 AVAILABLE 전이가 분리되어야 한다.
         seatLoadPort.markSeatsAvailable(reservation.seatIds)
         if (paymentPort.cancelSuccessPayment(reservationId, now)) {
             pointPort.refund(userId, reservation.totalAmount, now)
@@ -156,6 +163,7 @@ class PayReservationUseCase(
     private val holdPort: HoldPort,
     private val clock: Clock,
 ) {
+    @Transactional
     fun execute(userId: Long, queueToken: String, reservationId: Long, amount: Long, method: String): PaymentResponse {
         val now = LocalDateTime.now(clock)
         reservationPort.expirePendingReservations(now)
