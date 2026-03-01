@@ -5,6 +5,7 @@ import kr.hhplus.be.server.common.ForbiddenException
 import kr.hhplus.be.server.reservation.application.CreateReservationUseCase
 import kr.hhplus.be.server.reservation.application.HoldPort
 import kr.hhplus.be.server.reservation.application.HoldSeatsUseCase
+import kr.hhplus.be.server.reservation.application.CancelReservationUseCase
 import kr.hhplus.be.server.reservation.application.PayReservationUseCase
 import kr.hhplus.be.server.reservation.application.PaymentPort
 import kr.hhplus.be.server.reservation.application.PointPort
@@ -106,6 +107,24 @@ class ReservationUseCaseTest {
     }
 
     @Test
+    fun `create reservation usecase는 만료된 hold를 예약할 수 없다`() {
+        val queuePort = mock(ReservationQueuePort::class.java)
+        val holdPort = mock(HoldPort::class.java)
+        val reservationPort = mock(ReservationPort::class.java)
+        val useCase = CreateReservationUseCase(queuePort, holdPort, reservationPort, clock)
+
+        `when`(holdPort.getHold("hold-1")).thenReturn(
+            HoldSnapshot("hold-1", 1L, 1L, 100L, "queue-token", listOf(1L), 50000L, "ACTIVE", LocalDateTime.now(clock).minusSeconds(1)),
+        )
+
+        assertThrows(ConflictException::class.java) {
+            useCase.execute(1L, "queue-token", "hold-1")
+        }
+
+        verify(reservationPort, never()).createReservation(1L, 100L, "hold-1", 50000L, listOf(1L), LocalDateTime.now(clock))
+    }
+
+    @Test
     fun `pay usecase는 포트 mock만으로 결제 성공 흐름을 검증한다`() {
         val queuePort = mock(ReservationQueuePort::class.java)
         val reservationPort = mock(ReservationPort::class.java)
@@ -158,5 +177,31 @@ class ReservationUseCaseTest {
         verify(seatLoadPort).markSeatsAvailable(listOf(1L, 2L))
         verify(holdPort).markHoldExpired("hold-1")
         verify(reservationPort).markReservationExpiredByHold("hold-1", LocalDateTime.now(clock))
+    }
+
+    @Test
+    fun `cancel usecase는 결제 완료된 예약을 취소하면 포인트를 환불한다`() {
+        val queuePort = mock(ReservationQueuePort::class.java)
+        val reservationPort = mock(ReservationPort::class.java)
+        val paymentPort = mock(PaymentPort::class.java)
+        val pointPort = mock(PointPort::class.java)
+        val seatLoadPort = mock(SeatLoadPort::class.java)
+        val useCase = CancelReservationUseCase(queuePort, reservationPort, paymentPort, pointPort, seatLoadPort, clock)
+
+        `when`(reservationPort.getReservationForUpdate(10L)).thenReturn(
+            ReservationSnapshot(10L, 1L, 1L, 100L, "hold-1", listOf(1L, 2L), 100000L, "CONFIRMED", LocalDateTime.now(clock)),
+        )
+        `when`(paymentPort.cancelSuccessPayment(10L, LocalDateTime.now(clock))).thenReturn(true)
+        `when`(reservationPort.getReservation(10L)).thenReturn(
+            ReservationSnapshot(10L, 1L, 1L, 100L, "hold-1", listOf(1L, 2L), 100000L, "CANCELED", LocalDateTime.now(clock)),
+        )
+
+        val result = useCase.execute(1L, "queue-token", 10L, "CANCELED")
+
+        assertEquals("CANCELED", result.status)
+        verify(queuePort).validateForWrite("queue-token", 1L, 1L)
+        verify(seatLoadPort).markSeatsAvailable(listOf(1L, 2L))
+        verify(pointPort).refund(1L, 100000L, LocalDateTime.now(clock))
+        verify(reservationPort).markReservationCanceled(10L, LocalDateTime.now(clock))
     }
 }
