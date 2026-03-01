@@ -8,6 +8,7 @@
 - Service Sequence Diagram: [`docs/service-sequence.md`](docs/service-sequence.md)
 - Status Sequence and Transition Rules: [`docs/status-sequences.md`](docs/status-sequences.md)
 - Database Analysis Report: [`docs/advanced-db-report.md`](docs/advanced-db-report.md)
+- Concurrency Control Report: [`docs/concurrency-control-report.md`](docs/concurrency-control-report.md)
 
 ## Getting Started
 
@@ -60,4 +61,10 @@ http://localhost:8080/actuator
 
 ```bash
 ./gradlew test
+```
+
+실제 MySQL 통합 시나리오만 빠르게 검증하려면 현재 떠 있는 Docker MySQL을 사용하는 아래 테스트를 실행할 수 있습니다.
+
+```bash
+./gradlew test --tests kr.hhplus.be.server.LocalReservationIntegrationTest
 ```
