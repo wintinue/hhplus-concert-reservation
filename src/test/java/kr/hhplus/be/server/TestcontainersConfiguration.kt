@@ -1,11 +1,11 @@
 package kr.hhplus.be.server
 
 import jakarta.annotation.PreDestroy
-import org.springframework.context.annotation.Configuration
+import org.springframework.boot.test.context.TestConfiguration
 import org.testcontainers.containers.MySQLContainer
 import org.testcontainers.utility.DockerImageName
 
-@Configuration
+@TestConfiguration
 class TestcontainersConfiguration {
     @PreDestroy
     fun preDestroy() {
