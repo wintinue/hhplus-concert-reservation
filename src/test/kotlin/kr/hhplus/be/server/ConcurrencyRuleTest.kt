@@ -282,6 +282,7 @@ class ConcurrencyRuleTest {
         ): HoldSnapshot = HoldSnapshot("hold-${seatIds.joinToString("-")}", userId, 1L, scheduleId, queueToken, seatIds, totalAmount, "ACTIVE", now.plusMinutes(5))
 
         override fun getHold(holdId: String): HoldSnapshot? = null
+        override fun getHoldForUpdate(holdId: String): HoldSnapshot? = null
         override fun markHoldConfirmed(holdId: String) = Unit
         override fun markHoldExpired(holdId: String) = Unit
     }
@@ -291,6 +292,7 @@ class ConcurrencyRuleTest {
         override fun createHold(userId: Long, scheduleId: Long, queueToken: String, seatIds: List<Long>, totalAmount: Long, expiresAt: LocalDateTime) =
             throw UnsupportedOperationException()
         override fun getHold(holdId: String): HoldSnapshot? = null
+        override fun getHoldForUpdate(holdId: String): HoldSnapshot? = null
         override fun markHoldConfirmed(holdId: String) = Unit
         override fun markHoldExpired(holdId: String) = Unit
     }
@@ -300,6 +302,7 @@ class ConcurrencyRuleTest {
         override fun createHold(userId: Long, scheduleId: Long, queueToken: String, seatIds: List<Long>, totalAmount: Long, expiresAt: LocalDateTime) =
             throw UnsupportedOperationException()
         override fun getHold(holdId: String): HoldSnapshot? = hold.takeIf { it.holdId == holdId }
+        override fun getHoldForUpdate(holdId: String): HoldSnapshot? = getHold(holdId)
         override fun markHoldConfirmed(holdId: String) = Unit
         override fun markHoldExpired(holdId: String) = Unit
     }
