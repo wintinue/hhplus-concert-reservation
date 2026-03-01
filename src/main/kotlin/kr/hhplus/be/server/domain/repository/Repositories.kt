@@ -51,7 +51,7 @@ interface SeatRepository : JpaRepository<SeatEntity, Long> {
     fun findByScheduleIdOrderById(scheduleId: Long): List<SeatEntity>
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select s from SeatEntity s where s.id in :seatIds")
+    @Query("select s from SeatEntity s where s.id in :seatIds order by s.id asc")
     fun findAllForUpdate(@Param("seatIds") seatIds: List<Long>): List<SeatEntity>
 }
 
@@ -74,6 +74,10 @@ interface QueueTokenRepository : JpaRepository<QueueTokenEntity, String> {
 
 interface SeatHoldRepository : JpaRepository<SeatHoldEntity, String>
 {
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select h from SeatHoldEntity h where h.holdId = :holdId")
+    fun findByIdForUpdate(@Param("holdId") holdId: String): SeatHoldEntity?
+
     @Query("select h from SeatHoldEntity h where h.holdStatus = :status and h.holdExpiresAt < :now")
     fun findExpiredHolds(@Param("status") status: HoldStatus, @Param("now") now: LocalDateTime): List<SeatHoldEntity>
 }

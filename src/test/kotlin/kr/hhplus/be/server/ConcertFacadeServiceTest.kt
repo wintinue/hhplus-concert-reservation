@@ -6,6 +6,7 @@ import kr.hhplus.be.server.domain.entity.ConcertScheduleEntity
 import kr.hhplus.be.server.domain.entity.SeatEntity
 import kr.hhplus.be.server.domain.entity.UserEntity
 import kr.hhplus.be.server.domain.entity.UserPointEntity
+import kr.hhplus.be.server.domain.entity.PointTransactionEntity
 import kr.hhplus.be.server.domain.enums.ScheduleStatus
 import kr.hhplus.be.server.domain.enums.SeatStatus
 import kr.hhplus.be.server.domain.repository.ConcertRepository
@@ -17,14 +18,12 @@ import kr.hhplus.be.server.queue.QueueService
 import kr.hhplus.be.server.reservation.application.HoldPort
 import kr.hhplus.be.server.reservation.application.ReservationPort
 import kr.hhplus.be.server.service.ConcertFacadeService
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
-import org.mockito.ArgumentMatchers.anyLong
-import org.mockito.Mockito.mock
-import org.mockito.Mockito.never
-import org.mockito.Mockito.verify
-import org.mockito.Mockito.`when`
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDateTime
@@ -33,14 +32,14 @@ import java.util.Optional
 
 class ConcertFacadeServiceTest {
     private val clock = Clock.fixed(Instant.parse("2026-03-01T00:00:00Z"), ZoneOffset.UTC)
-    private val concertRepository: ConcertRepository = mock(ConcertRepository::class.java)
-    private val scheduleRepository: ConcertScheduleRepository = mock(ConcertScheduleRepository::class.java)
-    private val seatRepository: SeatRepository = mock(SeatRepository::class.java)
-    private val userPointRepository: UserPointRepository = mock(UserPointRepository::class.java)
-    private val pointTransactionRepository: PointTransactionRepository = mock(PointTransactionRepository::class.java)
-    private val queueService: QueueService = mock(QueueService::class.java)
-    private val holdPort: HoldPort = mock(HoldPort::class.java)
-    private val reservationPort: ReservationPort = mock(ReservationPort::class.java)
+    private val concertRepository = mockk<ConcertRepository>()
+    private val scheduleRepository = mockk<ConcertScheduleRepository>()
+    private val seatRepository = mockk<SeatRepository>()
+    private val userPointRepository = mockk<UserPointRepository>()
+    private val pointTransactionRepository = mockk<PointTransactionRepository>()
+    private val queueService = mockk<QueueService>(relaxed = true)
+    private val holdPort = mockk<HoldPort>(relaxed = true)
+    private val reservationPort = mockk<ReservationPort>(relaxed = true)
 
     private val service = ConcertFacadeService(
         concertRepository,
@@ -62,15 +61,14 @@ class ConcertFacadeServiceTest {
             service.charge(user, 0)
         }
 
-        verify(userPointRepository, never()).findForUpdate(anyLong())
+        verify(exactly = 0) { userPointRepository.findForUpdate(any()) }
     }
 
     @Test
     fun `getConcerts는 페이지 응답을 반환한다`() {
         val concert = concertEntity()
-        `when`(concertRepository.findAll(org.springframework.data.domain.PageRequest.of(0, 20))).thenReturn(
-            org.springframework.data.domain.PageImpl(listOf(concert), org.springframework.data.domain.PageRequest.of(0, 20), 1),
-        )
+        every { concertRepository.findAll(org.springframework.data.domain.PageRequest.of(0, 20)) } returns
+            org.springframework.data.domain.PageImpl(listOf(concert), org.springframework.data.domain.PageRequest.of(0, 20), 1)
 
         val response = service.getConcerts(0, 20)
 
@@ -83,20 +81,19 @@ class ConcertFacadeServiceTest {
         val user = userEntity()
         val concert = concertEntity()
         val schedule = scheduleEntity(concert)
-        `when`(concertRepository.findById(1L)).thenReturn(Optional.of(concert))
-        `when`(scheduleRepository.findByConcertIdAndStatusOrderByStartAt(1L, ScheduleStatus.OPEN)).thenReturn(listOf(schedule))
-        `when`(seatRepository.findByScheduleIdOrderById(1L)).thenReturn(
+        every { concertRepository.findById(1L) } returns Optional.of(concert)
+        every { scheduleRepository.findByConcertIdAndStatusOrderByStartAt(1L, ScheduleStatus.OPEN) } returns listOf(schedule)
+        every { seatRepository.findByScheduleIdOrderById(1L) } returns
             listOf(
                 seatEntity(schedule, 1L, SeatStatus.AVAILABLE),
                 seatEntity(schedule, 2L, SeatStatus.HELD),
-            ),
-        )
+            )
 
         val response = service.getSchedules(user, 1L, "queue-token")
 
         assertEquals(1, response.items.size)
         assertEquals(1, response.items.first().availableSeat)
-        verify(queueService).validateQueueTokenForRead("queue-token", 1L, 1L)
+        verify { queueService.validateQueueTokenForRead("queue-token", 1L, 1L) }
     }
 
     @Test
@@ -104,26 +101,40 @@ class ConcertFacadeServiceTest {
         val user = userEntity()
         val concert = concertEntity()
         val schedule = scheduleEntity(concert)
-        `when`(scheduleRepository.findById(1L)).thenReturn(Optional.of(schedule))
-        `when`(seatRepository.findByScheduleIdOrderById(1L)).thenReturn(listOf(seatEntity(schedule, 1L, SeatStatus.AVAILABLE)))
+        every { scheduleRepository.findById(1L) } returns Optional.of(schedule)
+        every { seatRepository.findByScheduleIdOrderById(1L) } returns listOf(seatEntity(schedule, 1L, SeatStatus.AVAILABLE))
 
         val response = service.getSeats(user, 1L, "queue-token")
 
         assertEquals(1, response.items.size)
         assertEquals("AVAILABLE", response.items.first().status)
-        verify(queueService).validateQueueTokenForRead("queue-token", 1L, 1L)
+        verify { queueService.validateQueueTokenForRead("queue-token", 1L, 1L) }
     }
 
     @Test
     fun `getMyPoints는 현재 포인트를 반환한다`() {
         val user = userEntity()
-        `when`(userPointRepository.findById(1L)).thenReturn(
-            Optional.of(UserPointEntity(userId = 1L, user = user, balance = 200000L, updatedAt = LocalDateTime.now(clock))),
-        )
+        every { userPointRepository.findById(1L) } returns
+            Optional.of(UserPointEntity(userId = 1L, user = user, balance = 200000L, updatedAt = LocalDateTime.now(clock)))
 
         val response = service.getMyPoints(user)
 
         assertEquals(200000L, response.balance)
+    }
+
+    @Test
+    fun `charge는 금액만큼 잔액을 증가시키고 거래를 기록한다`() {
+        val user = userEntity()
+        val point = UserPointEntity(userId = 1L, user = user, balance = 100000L, updatedAt = LocalDateTime.now(clock))
+        every { userPointRepository.findForUpdate(1L) } returns point
+        every { pointTransactionRepository.save(any<PointTransactionEntity>()) } answers { firstArg() }
+
+        val response = service.charge(user, 50000L)
+
+        assertEquals(50000L, response.chargedAmount)
+        assertEquals(150000L, response.balanceAfter)
+        assertEquals(150000L, point.balance)
+        verify { pointTransactionRepository.save(any<PointTransactionEntity>()) }
     }
 
     private fun userEntity(): UserEntity = UserEntity("user@test.com", "user", "password123").apply { id = 1L }

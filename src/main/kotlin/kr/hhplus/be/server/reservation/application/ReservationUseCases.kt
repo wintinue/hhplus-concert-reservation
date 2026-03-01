@@ -71,7 +71,7 @@ class CreateReservationUseCase(
         val now = LocalDateTime.now(clock)
         holdPort.expireActiveHolds(now)
         reservationPort.expirePendingReservations(now)
-        val hold = holdPort.getHold(holdId) ?: throw NotFoundException("HOLD", holdId)
+        val hold = holdPort.getHoldForUpdate(holdId) ?: throw NotFoundException("HOLD", holdId)
         queuePort.validateForWrite(queueToken, userId, hold.concertId)
         validateOwnership(hold.userId, userId, "다른 사용자의 hold 입니다.")
         if (hold.status != "ACTIVE" || hold.holdExpiresAt.isBefore(now)) {

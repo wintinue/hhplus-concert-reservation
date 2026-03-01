@@ -28,6 +28,7 @@ interface HoldPort {
     fun expireActiveHolds(now: LocalDateTime)
     fun createHold(userId: Long, scheduleId: Long, queueToken: String, seatIds: List<Long>, totalAmount: Long, expiresAt: LocalDateTime): HoldSnapshot
     fun getHold(holdId: String): HoldSnapshot?
+    fun getHoldForUpdate(holdId: String): HoldSnapshot?
     fun markHoldConfirmed(holdId: String)
     fun markHoldExpired(holdId: String)
 }
