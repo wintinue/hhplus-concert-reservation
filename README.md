@@ -10,6 +10,7 @@
 - Database Analysis Report: [`docs/advanced-db-report.md`](docs/advanced-db-report.md)
 - Concurrency Control Report: [`docs/concurrency-control-report.md`](docs/concurrency-control-report.md)
 - Redis Caching Strategy and Performance Report: [`docs/redis-caching-strategy-and-performance-report.md`](docs/redis-caching-strategy-and-performance-report.md)
+- Redis Ranking and Queue Design Report: [`docs/redis-ranking-and-queue-design-report.md`](docs/redis-ranking-and-queue-design-report.md)
 
 ## Getting Started
 
