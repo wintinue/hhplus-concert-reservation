@@ -13,8 +13,6 @@ import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import org.springframework.transaction.event.TransactionPhase
-import org.springframework.transaction.event.TransactionalEventListener
 import java.time.Clock
 import java.time.LocalDateTime
 import java.util.UUID
@@ -75,7 +73,17 @@ class ReservationPaymentSagaService(
     }
 
     @Transactional
-    fun markPublished(sagaId: String) {
+    fun markDispatched(sagaId: String) {
+        val saga = bookingSagaRepository.findBySagaId(sagaId) ?: return
+        saga.currentStep = "KAFKA_PUBLISHED"
+        saga.sagaStatus = BookingSagaStatus.STARTED
+        saga.completedAt = null
+        saga.failedAt = null
+        saga.failureReason = null
+    }
+
+    @Transactional
+    fun markCompleted(sagaId: String) {
         val saga = bookingSagaRepository.findBySagaId(sagaId) ?: return
         saga.currentStep = "DATA_PLATFORM_SENT"
         saga.sagaStatus = BookingSagaStatus.COMPLETED
@@ -95,22 +103,10 @@ class ReservationPaymentSagaService(
 }
 
 @Component
-class ReservationPaymentSagaListener(
-    private val reservationPaymentSagaService: ReservationPaymentSagaService,
-    private val reservationOutboxRelay: ReservationOutboxRelay,
-) {
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    fun onCompleted(event: ReservationPaymentCompletedEvent) {
-        val eventKey = reservationPaymentSagaService.start(event)
-        reservationOutboxRelay.publishByEventKey(eventKey)
-    }
-}
-
-@Component
 class ReservationOutboxRelay(
-    private val outboxEventRepository: OutboxEventRepository,
-    private val reservationDataPlatformPort: ReservationDataPlatformPort,
+    private val reservationPaymentMessagePublisher: ReservationPaymentMessagePublisher,
     private val reservationPaymentSagaService: ReservationPaymentSagaService,
+    private val outboxEventRepository: OutboxEventRepository,
     private val objectMapper: ObjectMapper,
     private val clock: Clock,
     @Value("\${app.outbox.max-retry-count:3}")
@@ -135,12 +131,22 @@ class ReservationOutboxRelay(
     fun publish(outboxEvent: OutboxEventEntity) {
         try {
             val payload = objectMapper.readValue(outboxEvent.payload, ReservationPaymentPayload::class.java)
-            reservationDataPlatformPort.sendReservationPayment(payload)
+            val result = reservationPaymentMessagePublisher.publish(
+                ReservationPaymentKafkaMessage(
+                    eventKey = outboxEvent.eventKey,
+                    sagaId = outboxEvent.sagaId,
+                    reservationId = outboxEvent.aggregateId,
+                    payload = payload,
+                ),
+            )
             outboxEvent.eventStatus = OutboxEventStatus.PUBLISHED
             outboxEvent.publishedAt = LocalDateTime.now(clock)
             outboxEvent.lastError = null
             outboxEventRepository.save(outboxEvent)
-            reservationPaymentSagaService.markPublished(outboxEvent.sagaId)
+            when (result) {
+                ReservationPaymentPublishResult.DISPATCHED -> reservationPaymentSagaService.markDispatched(outboxEvent.sagaId)
+                ReservationPaymentPublishResult.COMPLETED -> reservationPaymentSagaService.markCompleted(outboxEvent.sagaId)
+            }
         } catch (ex: RuntimeException) {
             outboxEvent.eventStatus = OutboxEventStatus.FAILED
             outboxEvent.retryCount += 1
