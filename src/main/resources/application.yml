@@ -54,6 +54,10 @@ app:
     topic:
       reservation-payment: reservation.payment.completed
     consumer-group: hhplus-reservation-data-platform
+  reservation:
+    cleanup:
+      fixed-delay-ms: 30000
+      min-interval-ms: 5000
 
 ---
 spring.config.activate.on-profile: kafka

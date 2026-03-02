@@ -26,8 +26,7 @@ import kr.hhplus.be.server.domain.repository.PointTransactionRepository
 import kr.hhplus.be.server.domain.repository.SeatRepository
 import kr.hhplus.be.server.domain.repository.UserPointRepository
 import kr.hhplus.be.server.queue.QueueService
-import kr.hhplus.be.server.reservation.application.HoldPort
-import kr.hhplus.be.server.reservation.application.ReservationPort
+import kr.hhplus.be.server.reservation.application.ReservationExpirationCoordinator
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -44,8 +43,7 @@ class ConcertFacadeService(
     private val userPointRepository: UserPointRepository,
     private val pointTransactionRepository: PointTransactionRepository,
     private val queueService: QueueService,
-    private val holdPort: HoldPort,
-    private val reservationPort: ReservationPort,
+    private val reservationExpirationCoordinator: ReservationExpirationCoordinator,
     private val concertCacheService: ConcertCacheService,
     private val concertRankingService: ConcertRankingService,
     private val lockExecutor: DistributedLockExecutor,
@@ -74,8 +72,7 @@ class ConcertFacadeService(
 
     @Transactional
     fun getSchedules(user: UserEntity, concertId: Long, queueToken: String): ScheduleListResponse {
-        holdPort.expireActiveHolds(LocalDateTime.now(clock))
-        reservationPort.expirePendingReservations(LocalDateTime.now(clock))
+        reservationExpirationCoordinator.cleanupIfDue()
         queueService.validateQueueTokenForRead(queueToken, user.id!!, concertId)
         return concertCacheService.getSchedules(concertId) {
             val concert = concertRepository.findById(concertId).orElseThrow { NotFoundException("CONCERT", concertId) }
@@ -96,8 +93,7 @@ class ConcertFacadeService(
 
     @Transactional
     fun getSeats(user: UserEntity, scheduleId: Long, queueToken: String): SeatListResponse {
-        holdPort.expireActiveHolds(LocalDateTime.now(clock))
-        reservationPort.expirePendingReservations(LocalDateTime.now(clock))
+        reservationExpirationCoordinator.cleanupIfDue()
         val schedule = scheduleRepository.findById(scheduleId).orElseThrow { NotFoundException("SCHEDULE", scheduleId) }
         queueService.validateQueueTokenForRead(queueToken, user.id!!, schedule.concert.id!!)
         return concertCacheService.getSeats(scheduleId) {
