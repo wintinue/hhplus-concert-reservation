@@ -9,6 +9,7 @@
 - Status Sequence and Transition Rules: [`docs/status-sequences.md`](docs/status-sequences.md)
 - Database Analysis Report: [`docs/advanced-db-report.md`](docs/advanced-db-report.md)
 - Concurrency Control Report: [`docs/concurrency-control-report.md`](docs/concurrency-control-report.md)
+- Redis Caching Strategy and Performance Report: [`docs/redis-caching-strategy-and-performance-report.md`](docs/redis-caching-strategy-and-performance-report.md)
 
 ## Getting Started
 
@@ -18,7 +19,8 @@
 - Build tool: Gradle Wrapper (8.11.1)
 - Runtime target: Java 17 (toolchain fixed)
 - Local database: MySQL 8 via `docker-compose`
-- Test stack: JUnit5, Spring Boot Test, and Testcontainers(MySQL)
+- Local cache/lock store: Redis 7 via `docker-compose`
+- Test stack: JUnit5, Spring Boot Test, and Testcontainers(MySQL, Redis)
 
 ### Prerequisites
 
@@ -37,7 +39,7 @@ docker-compose up -d
 
 #### 2. Start Spring Server
 
-The default active profile is `local`. Start the Spring server after the local MySQL container is running.
+The default active profile is `local`. Start the Spring server after the local MySQL and Redis containers are running.
 
 ```bash
 ./gradlew bootRun
@@ -63,8 +65,9 @@ http://localhost:8080/actuator
 ./gradlew test
 ```
 
-실제 MySQL 통합 시나리오만 빠르게 검증하려면 현재 떠 있는 Docker MySQL을 사용하는 아래 테스트를 실행할 수 있습니다.
+실제 로컬 인프라(MySQL, Redis) 기반 통합 시나리오만 빠르게 검증하려면 현재 떠 있는 Docker 컨테이너를 사용하는 아래 테스트를 실행할 수 있습니다.
 
 ```bash
-./gradlew test --tests kr.hhplus.be.server.LocalReservationIntegrationTest
+docker-compose up -d
+./gradlew test --tests kr.hhplus.be.server.LocalReservationIntegrationTest -Dlocal.integration.enabled=true
 ```

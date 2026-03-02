@@ -2,6 +2,7 @@ package kr.hhplus.be.server
 
 import kr.hhplus.be.server.common.ConflictException
 import kr.hhplus.be.server.common.ForbiddenException
+import kr.hhplus.be.server.common.lock.DistributedLockExecutor
 import kr.hhplus.be.server.reservation.application.CreateReservationUseCase
 import kr.hhplus.be.server.reservation.application.HoldPort
 import kr.hhplus.be.server.reservation.application.HoldSeatsUseCase
@@ -24,6 +25,11 @@ import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.TransactionDefinition
+import org.springframework.transaction.TransactionStatus
+import org.springframework.transaction.support.SimpleTransactionStatus
+import org.springframework.transaction.support.TransactionTemplate
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDateTime
@@ -31,6 +37,10 @@ import java.time.ZoneOffset
 
 class ReservationUseCaseTest {
     private val clock = Clock.fixed(Instant.parse("2026-03-01T00:00:00Z"), ZoneOffset.UTC)
+    private val lockExecutor = object : DistributedLockExecutor {
+        override fun <T> execute(key: String, action: () -> T): T = action()
+    }
+    private val transactionTemplate = TransactionTemplate(NoopTransactionManager())
 
     @Test
     fun `hold usecase는 외부 포트만 mock으로 두고 좌석 충돌을 검증한다`() {
@@ -38,7 +48,7 @@ class ReservationUseCaseTest {
         val seatLoadPort = mockk<SeatLoadPort>(relaxed = true)
         val holdPort = mockk<HoldPort>(relaxed = true)
         val reservationPort = mockk<ReservationPort>(relaxed = true)
-        val useCase = HoldSeatsUseCase(queuePort, seatLoadPort, holdPort, reservationPort, clock)
+        val useCase = HoldSeatsUseCase(queuePort, seatLoadPort, holdPort, reservationPort, lockExecutor, transactionTemplate, clock)
 
         every { seatLoadPort.getScheduleConcertId(100L) } returns 1L
         every { queuePort.validateForWrite("queue-token", 1L, 1L) } returns "queue-token"
@@ -63,7 +73,7 @@ class ReservationUseCaseTest {
         val seatLoadPort = mockk<SeatLoadPort>(relaxed = true)
         val holdPort = mockk<HoldPort>(relaxed = true)
         val reservationPort = mockk<ReservationPort>(relaxed = true)
-        val useCase = HoldSeatsUseCase(queuePort, seatLoadPort, holdPort, reservationPort, clock)
+        val useCase = HoldSeatsUseCase(queuePort, seatLoadPort, holdPort, reservationPort, lockExecutor, transactionTemplate, clock)
 
         every { seatLoadPort.getScheduleConcertId(100L) } returns 1L
         every { queuePort.validateForWrite("queue-token", 1L, 1L) } returns "queue-token"
@@ -91,7 +101,7 @@ class ReservationUseCaseTest {
         val queuePort = mockk<ReservationQueuePort>(relaxed = true)
         val holdPort = mockk<HoldPort>(relaxed = true)
         val reservationPort = mockk<ReservationPort>(relaxed = true)
-        val useCase = CreateReservationUseCase(queuePort, holdPort, reservationPort, clock)
+        val useCase = CreateReservationUseCase(queuePort, holdPort, reservationPort, lockExecutor, transactionTemplate, clock)
 
         every { holdPort.getHoldForUpdate("hold-1") } returns
             HoldSnapshot("hold-1", 2L, 1L, 100L, "queue-token", listOf(1L), 50000L, "ACTIVE", LocalDateTime.now(clock).plusMinutes(5))
@@ -108,7 +118,7 @@ class ReservationUseCaseTest {
         val queuePort = mockk<ReservationQueuePort>(relaxed = true)
         val holdPort = mockk<HoldPort>(relaxed = true)
         val reservationPort = mockk<ReservationPort>(relaxed = true)
-        val useCase = CreateReservationUseCase(queuePort, holdPort, reservationPort, clock)
+        val useCase = CreateReservationUseCase(queuePort, holdPort, reservationPort, lockExecutor, transactionTemplate, clock)
 
         every { holdPort.getHoldForUpdate("hold-1") } returns
             HoldSnapshot("hold-1", 1L, 1L, 100L, "queue-token", listOf(1L), 50000L, "ACTIVE", LocalDateTime.now(clock).minusSeconds(1))
@@ -128,7 +138,7 @@ class ReservationUseCaseTest {
         val pointPort = mockk<PointPort>(relaxed = true)
         val seatLoadPort = mockk<SeatLoadPort>(relaxed = true)
         val holdPort = mockk<HoldPort>(relaxed = true)
-        val useCase = PayReservationUseCase(queuePort, reservationPort, paymentPort, pointPort, seatLoadPort, holdPort, clock)
+        val useCase = PayReservationUseCase(queuePort, reservationPort, paymentPort, pointPort, seatLoadPort, holdPort, lockExecutor, transactionTemplate, clock)
 
         every { reservationPort.getReservationForUpdate(10L) } returns
             ReservationSnapshot(10L, 1L, 1L, 100L, "hold-1", listOf(1L, 2L), 100000L, "PENDING_PAYMENT", LocalDateTime.now(clock))
@@ -154,7 +164,7 @@ class ReservationUseCaseTest {
         val pointPort = mockk<PointPort>()
         val seatLoadPort = mockk<SeatLoadPort>(relaxed = true)
         val holdPort = mockk<HoldPort>(relaxed = true)
-        val useCase = PayReservationUseCase(queuePort, reservationPort, paymentPort, pointPort, seatLoadPort, holdPort, clock)
+        val useCase = PayReservationUseCase(queuePort, reservationPort, paymentPort, pointPort, seatLoadPort, holdPort, lockExecutor, transactionTemplate, clock)
 
         every { reservationPort.getReservationForUpdate(10L) } returns
             ReservationSnapshot(10L, 1L, 1L, 100L, "hold-1", listOf(1L, 2L), 100000L, "PENDING_PAYMENT", LocalDateTime.now(clock))
@@ -179,7 +189,7 @@ class ReservationUseCaseTest {
         val paymentPort = mockk<PaymentPort>()
         val pointPort = mockk<PointPort>(relaxed = true)
         val seatLoadPort = mockk<SeatLoadPort>(relaxed = true)
-        val useCase = CancelReservationUseCase(queuePort, reservationPort, paymentPort, pointPort, seatLoadPort, clock)
+        val useCase = CancelReservationUseCase(queuePort, reservationPort, paymentPort, pointPort, seatLoadPort, lockExecutor, transactionTemplate, clock)
 
         every { reservationPort.getReservationForUpdate(10L) } returns
             ReservationSnapshot(10L, 1L, 1L, 100L, "hold-1", listOf(1L, 2L), 100000L, "CONFIRMED", LocalDateTime.now(clock))
@@ -195,5 +205,11 @@ class ReservationUseCaseTest {
         verify { seatLoadPort.markSeatsAvailable(listOf(1L, 2L)) }
         verify { pointPort.refund(1L, 100000L, LocalDateTime.now(clock)) }
         verify { reservationPort.markReservationCanceled(10L, LocalDateTime.now(clock)) }
+    }
+
+    private class NoopTransactionManager : PlatformTransactionManager {
+        override fun getTransaction(definition: TransactionDefinition?): TransactionStatus = SimpleTransactionStatus()
+        override fun commit(status: TransactionStatus) = Unit
+        override fun rollback(status: TransactionStatus) = Unit
     }
 }
