@@ -26,8 +26,10 @@ import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Lock
+import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
+import org.springframework.transaction.annotation.Transactional
 import jakarta.persistence.LockModeType
 import java.time.LocalDateTime
 
@@ -140,6 +142,23 @@ interface OutboxEventRepository : JpaRepository<OutboxEventEntity, Long> {
         """,
     )
     fun findTop100ByEventStatusInOrderByCreatedAtAsc(@Param("statuses") statuses: Collection<OutboxEventStatus>): List<OutboxEventEntity>
+
+    @Transactional
+    @Modifying(clearAutomatically = true)
+    @Query(
+        """
+        update OutboxEventEntity e
+        set e.eventStatus = :nextStatus,
+            e.lastError = null
+        where e.eventKey = :eventKey
+          and e.eventStatus in :currentStatuses
+        """,
+    )
+    fun updateStatusIfCurrentIn(
+        @Param("eventKey") eventKey: String,
+        @Param("currentStatuses") currentStatuses: Collection<OutboxEventStatus>,
+        @Param("nextStatus") nextStatus: OutboxEventStatus,
+    ): Int
 }
 
 interface BookingSagaRepository : JpaRepository<BookingSagaEntity, Long> {

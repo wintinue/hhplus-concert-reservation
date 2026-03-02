@@ -11,6 +11,7 @@
 - Concurrency Control Report: [`docs/reports/concurrency-control-report.md`](docs/reports/concurrency-control-report.md)
 - Redis Caching Strategy and Performance Report: [`docs/reports/redis-caching-strategy-and-performance-report.md`](docs/reports/redis-caching-strategy-and-performance-report.md)
 - Redis Ranking and Queue Design Report: [`docs/reports/redis-ranking-and-queue-design-report.md`](docs/reports/redis-ranking-and-queue-design-report.md)
+- Kafka Report: [`docs/reports/kafka-report.md`](docs/reports/kafka-report.md)
 
 ## Getting Started
 
@@ -38,12 +39,24 @@ Run the Docker containers required for the `local` profile.
 docker-compose up -d
 ```
 
+Kafka 프로필까지 함께 검증하려면 별도 Kafka 클러스터도 띄웁니다.
+
+```bash
+docker compose -p hhplus-kafka -f docker-compose.kafka.yml up -d
+```
+
 #### 2. Start Spring Server
 
 The default active profile is `local`. Start the Spring server after the local MySQL and Redis containers are running.
 
 ```bash
 ./gradlew bootRun
+```
+
+Kafka producer/consumer 경로를 사용하려면 `kafka` 프로필을 추가합니다.
+
+```bash
+SPRING_PROFILES_ACTIVE=local,kafka ./gradlew bootRun
 ```
 
 On Windows, use:
