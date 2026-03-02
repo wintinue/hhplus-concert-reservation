@@ -7,13 +7,17 @@ import kr.hhplus.be.server.common.ConflictException
 import kr.hhplus.be.server.domain.entity.QueueTokenEntity
 import kr.hhplus.be.server.domain.entity.UserEntity
 import kr.hhplus.be.server.domain.enums.HoldStatus
+import kr.hhplus.be.server.domain.enums.BookingSagaStatus
+import kr.hhplus.be.server.domain.enums.OutboxEventStatus
 import kr.hhplus.be.server.domain.enums.PaymentStatus
 import kr.hhplus.be.server.domain.enums.QueueStatus
 import kr.hhplus.be.server.domain.enums.ReservationStatus
 import kr.hhplus.be.server.domain.enums.ScheduleStatus
 import kr.hhplus.be.server.domain.enums.SeatStatus
+import kr.hhplus.be.server.domain.repository.BookingSagaRepository
 import kr.hhplus.be.server.domain.repository.ConcertRepository
 import kr.hhplus.be.server.domain.repository.ConcertScheduleRepository
+import kr.hhplus.be.server.domain.repository.OutboxEventRepository
 import kr.hhplus.be.server.domain.repository.PaymentRepository
 import kr.hhplus.be.server.domain.repository.PointTransactionRepository
 import kr.hhplus.be.server.domain.repository.QueueTokenRepository
@@ -26,6 +30,7 @@ import kr.hhplus.be.server.domain.repository.UserPointRepository
 import kr.hhplus.be.server.domain.repository.UserRepository
 import kr.hhplus.be.server.domain.repository.UserSessionRepository
 import kr.hhplus.be.server.queue.QueueService
+import kr.hhplus.be.server.reservation.infra.MockReservationDataPlatformClient
 import kr.hhplus.be.server.reservation.application.CancelReservationUseCase
 import kr.hhplus.be.server.reservation.application.CreateReservationUseCase
 import kr.hhplus.be.server.reservation.application.GetReservationUseCase
@@ -105,6 +110,12 @@ abstract class AbstractReservationIntegrationScenarioTest {
     protected lateinit var paymentRepository: PaymentRepository
 
     @Autowired
+    protected lateinit var outboxEventRepository: OutboxEventRepository
+
+    @Autowired
+    protected lateinit var bookingSagaRepository: BookingSagaRepository
+
+    @Autowired
     protected lateinit var pointTransactionRepository: PointTransactionRepository
 
     @Autowired
@@ -119,9 +130,15 @@ abstract class AbstractReservationIntegrationScenarioTest {
     @Autowired
     protected lateinit var clock: Clock
 
+    @Autowired
+    protected lateinit var mockReservationDataPlatformClient: MockReservationDataPlatformClient
+
     @BeforeEach
     fun cleanState() {
+        mockReservationDataPlatformClient.clear()
         paymentRepository.deleteAllInBatch()
+        outboxEventRepository.deleteAllInBatch()
+        bookingSagaRepository.deleteAllInBatch()
         pointTransactionRepository.deleteAllInBatch()
         reservationItemRepository.deleteAllInBatch()
         reservationRepository.deleteAllInBatch()
@@ -151,6 +168,10 @@ abstract class AbstractReservationIntegrationScenarioTest {
         assertEquals(ReservationStatus.CONFIRMED, reservationRepository.findById(reservation.reservationId).orElseThrow().reservationStatus)
         assertEquals(PaymentStatus.SUCCESS, paymentRepository.findById(payment.paymentId).orElseThrow().paymentStatus)
         assertEquals(0L, userPointRepository.findById(user.id!!).orElseThrow().balance)
+        assertEquals(1, mockReservationDataPlatformClient.getSentPayloads().size)
+        assertEquals(reservation.reservationId, mockReservationDataPlatformClient.getSentPayloads().single().reservationId)
+        assertEquals(OutboxEventStatus.PUBLISHED, outboxEventRepository.findAll().single().eventStatus)
+        assertEquals(BookingSagaStatus.COMPLETED, bookingSagaRepository.findByReservationId(reservation.reservationId)?.sagaStatus)
     }
 
     @Test

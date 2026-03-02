@@ -39,3 +39,7 @@ app:
     wait-timeout-ms: 3000
     lease-timeout-ms: 5000
     retry-interval-ms: 50
+  data-platform:
+    base-url:
+  outbox:
+    max-retry-count: 3

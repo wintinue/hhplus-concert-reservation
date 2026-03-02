@@ -9,6 +9,7 @@ import kr.hhplus.be.server.reservation.application.GetReservationsUseCase
 import kr.hhplus.be.server.reservation.application.HoldSeatsUseCase
 import kr.hhplus.be.server.reservation.application.PayReservationUseCase
 import kr.hhplus.be.server.service.ConcertFacadeService
+import kr.hhplus.be.server.service.ReservationOpsService
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
@@ -46,6 +47,7 @@ class ConcertController(
     private val getReservationUseCase: GetReservationUseCase,
     private val cancelReservationUseCase: CancelReservationUseCase,
     private val payReservationUseCase: PayReservationUseCase,
+    private val reservationOpsService: ReservationOpsService,
 ) {
     @GetMapping("/concerts")
     fun getConcerts(
@@ -153,4 +155,23 @@ class ConcertController(
         @RequestHeader("X-Queue-Token") queueToken: String,
         @RequestBody request: PaymentRequest,
     ): PaymentResponse = payReservationUseCase.execute(authService.requireUser(authorization).id!!, queueToken, request.reservationId, request.amount, request.method)
+
+    @GetMapping("/ops/outbox-events")
+    fun getOutboxEvents(
+        @RequestHeader("Authorization") authorization: String,
+        @RequestParam(required = false) status: String?,
+        @RequestParam(defaultValue = "20") limit: Int,
+    ): OutboxEventListResponse {
+        authService.requireUser(authorization)
+        return reservationOpsService.getOutboxEvents(status, limit)
+    }
+
+    @GetMapping("/ops/booking-sagas/{reservationId}")
+    fun getBookingSaga(
+        @RequestHeader("Authorization") authorization: String,
+        @PathVariable reservationId: Long,
+    ): BookingSagaResponse {
+        authService.requireUser(authorization)
+        return reservationOpsService.getBookingSaga(reservationId)
+    }
 }

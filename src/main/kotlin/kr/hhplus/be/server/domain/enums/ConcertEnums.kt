@@ -53,3 +53,15 @@ enum class ScheduleStatus {
     CLOSED,
     CANCELED,
 }
+
+enum class OutboxEventStatus {
+    PENDING,
+    PUBLISHED,
+    FAILED,
+}
+
+enum class BookingSagaStatus {
+    STARTED,
+    COMPLETED,
+    FAILED,
+}

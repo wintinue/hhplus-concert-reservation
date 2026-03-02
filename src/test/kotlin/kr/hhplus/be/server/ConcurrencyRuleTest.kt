@@ -11,6 +11,7 @@ import kr.hhplus.be.server.reservation.application.HoldSeatsUseCase
 import kr.hhplus.be.server.reservation.application.PayReservationUseCase
 import kr.hhplus.be.server.reservation.application.PaymentPort
 import kr.hhplus.be.server.reservation.application.PointPort
+import kr.hhplus.be.server.reservation.application.ReservationPaymentEventPublisher
 import kr.hhplus.be.server.reservation.application.ReservationPort
 import kr.hhplus.be.server.reservation.application.ReservationQueuePort
 import kr.hhplus.be.server.reservation.application.SeatLoadPort
@@ -33,6 +34,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import org.springframework.context.ApplicationEventPublisher
 
 class ConcurrencyRuleTest {
     private val clock = Clock.fixed(Instant.parse("2026-03-01T00:00:00Z"), ZoneOffset.UTC)
@@ -40,6 +42,7 @@ class ConcurrencyRuleTest {
         override fun <T> execute(key: String, action: () -> T): T = action()
     }
     private val transactionTemplate = TransactionTemplate(NoopTransactionManager())
+    private val eventPublisher = ReservationPaymentEventPublisher(ApplicationEventPublisher { })
 
     @Test
     fun `동일 좌석에 대한 동시 선점 요청은 하나만 성공해야 한다`() {
@@ -85,7 +88,7 @@ class ConcurrencyRuleTest {
         )
         val paymentPort = SingleSuccessPaymentPort(now)
         val pointPort = InMemoryPointPort(balance = 200000L)
-        val useCase = PayReservationUseCase(queuePort, reservationPort, paymentPort, pointPort, seatLoadPort, holdPort, lockExecutor, transactionTemplate, clock)
+        val useCase = PayReservationUseCase(queuePort, reservationPort, paymentPort, pointPort, seatLoadPort, holdPort, eventPublisher, lockExecutor, transactionTemplate, clock)
 
         val successCount = AtomicInteger()
         val conflictCount = AtomicInteger()
@@ -182,7 +185,7 @@ class ConcurrencyRuleTest {
         )
         val paymentPort = MultiReservationPaymentPort(now)
         val pointPort = InMemoryPointPort(balance = 100000L)
-        val useCase = PayReservationUseCase(queuePort, reservationPort, paymentPort, pointPort, seatLoadPort, holdPort, lockExecutor, transactionTemplate, clock)
+        val useCase = PayReservationUseCase(queuePort, reservationPort, paymentPort, pointPort, seatLoadPort, holdPort, eventPublisher, lockExecutor, transactionTemplate, clock)
 
         val successCount = AtomicInteger()
         val conflictCount = AtomicInteger()
