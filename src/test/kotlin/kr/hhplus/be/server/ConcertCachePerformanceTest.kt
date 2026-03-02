@@ -1,5 +1,7 @@
 package kr.hhplus.be.server
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import kr.hhplus.be.server.api.ConcertListResponse
 import kr.hhplus.be.server.api.ConcertSummary
 import kr.hhplus.be.server.api.ScheduleListResponse
@@ -14,7 +16,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class ConcertCachePerformanceTest {
     private val cacheManager = ConcurrentMapCacheManager("concert-list", "concert-schedule", "schedule-seat")
-    private val cacheService = ConcertCacheService(cacheManager)
+    private val cacheService = ConcertCacheService(cacheManager, ObjectMapper().registerModule(JavaTimeModule()))
 
     @Test
     fun `measure cache hit improvement with synthetic read cost`() {
