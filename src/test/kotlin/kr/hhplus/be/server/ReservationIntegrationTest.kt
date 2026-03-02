@@ -8,7 +8,7 @@ import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
 import org.testcontainers.utility.DockerImageName
 
-@SpringBootTest(classes = [ServerApplication::class])
+@SpringBootTest(classes = [ServerApplication::class], webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers(disabledWithoutDocker = true)
 class ReservationIntegrationTest : AbstractReservationIntegrationScenarioTest() {
     companion object {

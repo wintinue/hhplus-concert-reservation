@@ -2,15 +2,15 @@
 
 ## Design Docs
 
-- API Specification: [`docs/openapi.yaml`](docs/openapi.yaml)
-- ERD: [`docs/erd.md`](docs/erd.md)
-- Infrastructure Diagram: [`docs/infra.md`](docs/infra.md)
-- Service Sequence Diagram: [`docs/service-sequence.md`](docs/service-sequence.md)
-- Status Sequence and Transition Rules: [`docs/status-sequences.md`](docs/status-sequences.md)
-- Database Analysis Report: [`docs/advanced-db-report.md`](docs/advanced-db-report.md)
-- Concurrency Control Report: [`docs/concurrency-control-report.md`](docs/concurrency-control-report.md)
-- Redis Caching Strategy and Performance Report: [`docs/redis-caching-strategy-and-performance-report.md`](docs/redis-caching-strategy-and-performance-report.md)
-- Redis Ranking and Queue Design Report: [`docs/redis-ranking-and-queue-design-report.md`](docs/redis-ranking-and-queue-design-report.md)
+- API Specification: [`docs/architecture/openapi.yaml`](docs/architecture/openapi.yaml)
+- ERD: [`docs/architecture/erd.md`](docs/architecture/erd.md)
+- Infrastructure Diagram: [`docs/architecture/infra.md`](docs/architecture/infra.md)
+- Service Sequence Diagram: [`docs/architecture/service-sequence.md`](docs/architecture/service-sequence.md)
+- Status Sequence and Transition Rules: [`docs/architecture/status-sequences.md`](docs/architecture/status-sequences.md)
+- Database Analysis Report: [`docs/reports/advanced-db-report.md`](docs/reports/advanced-db-report.md)
+- Concurrency Control Report: [`docs/reports/concurrency-control-report.md`](docs/reports/concurrency-control-report.md)
+- Redis Caching Strategy and Performance Report: [`docs/reports/redis-caching-strategy-and-performance-report.md`](docs/reports/redis-caching-strategy-and-performance-report.md)
+- Redis Ranking and Queue Design Report: [`docs/reports/redis-ranking-and-queue-design-report.md`](docs/reports/redis-ranking-and-queue-design-report.md)
 
 ## Getting Started
 

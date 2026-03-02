@@ -10,6 +10,8 @@ import kr.hhplus.be.server.reservation.application.CancelReservationUseCase
 import kr.hhplus.be.server.reservation.application.PayReservationUseCase
 import kr.hhplus.be.server.reservation.application.PaymentPort
 import kr.hhplus.be.server.reservation.application.PointPort
+import kr.hhplus.be.server.reservation.application.ReservationPaymentCompletedEvent
+import kr.hhplus.be.server.reservation.application.ReservationPaymentEventPublisher
 import kr.hhplus.be.server.reservation.application.ReservationPort
 import kr.hhplus.be.server.reservation.application.ReservationQueuePort
 import kr.hhplus.be.server.reservation.application.SeatLoadPort
@@ -138,7 +140,8 @@ class ReservationUseCaseTest {
         val pointPort = mockk<PointPort>(relaxed = true)
         val seatLoadPort = mockk<SeatLoadPort>(relaxed = true)
         val holdPort = mockk<HoldPort>(relaxed = true)
-        val useCase = PayReservationUseCase(queuePort, reservationPort, paymentPort, pointPort, seatLoadPort, holdPort, lockExecutor, transactionTemplate, clock)
+        val eventPublisher = mockk<ReservationPaymentEventPublisher>(relaxed = true)
+        val useCase = PayReservationUseCase(queuePort, reservationPort, paymentPort, pointPort, seatLoadPort, holdPort, eventPublisher, lockExecutor, transactionTemplate, clock)
 
         every { reservationPort.getReservationForUpdate(10L) } returns
             ReservationSnapshot(10L, 1L, 1L, 100L, "hold-1", listOf(1L, 2L), 100000L, "PENDING_PAYMENT", LocalDateTime.now(clock))
@@ -154,6 +157,21 @@ class ReservationUseCaseTest {
         verify { reservationPort.markReservationConfirmed(10L) }
         verify { seatLoadPort.markSeatsSold(listOf(1L, 2L)) }
         verify { queuePort.expireAfterPayment("queue-token") }
+        verify {
+            eventPublisher.completed(
+                ReservationPaymentCompletedEvent(
+                    reservationId = 10L,
+                    userId = 1L,
+                    concertId = 1L,
+                    scheduleId = 100L,
+                    seatIds = listOf(1L, 2L),
+                    paymentId = 1L,
+                    amount = 100000L,
+                    method = "CARD",
+                    paidAt = LocalDateTime.now(clock),
+                ),
+            )
+        }
     }
 
     @Test
@@ -164,7 +182,8 @@ class ReservationUseCaseTest {
         val pointPort = mockk<PointPort>()
         val seatLoadPort = mockk<SeatLoadPort>(relaxed = true)
         val holdPort = mockk<HoldPort>(relaxed = true)
-        val useCase = PayReservationUseCase(queuePort, reservationPort, paymentPort, pointPort, seatLoadPort, holdPort, lockExecutor, transactionTemplate, clock)
+        val eventPublisher = mockk<ReservationPaymentEventPublisher>(relaxed = true)
+        val useCase = PayReservationUseCase(queuePort, reservationPort, paymentPort, pointPort, seatLoadPort, holdPort, eventPublisher, lockExecutor, transactionTemplate, clock)
 
         every { reservationPort.getReservationForUpdate(10L) } returns
             ReservationSnapshot(10L, 1L, 1L, 100L, "hold-1", listOf(1L, 2L), 100000L, "PENDING_PAYMENT", LocalDateTime.now(clock))
@@ -180,6 +199,7 @@ class ReservationUseCaseTest {
         verify { seatLoadPort.markSeatsAvailable(listOf(1L, 2L)) }
         verify { holdPort.markHoldExpired("hold-1") }
         verify { reservationPort.markReservationExpiredByHold("hold-1", LocalDateTime.now(clock)) }
+        verify(exactly = 0) { eventPublisher.completed(any()) }
     }
 
     @Test

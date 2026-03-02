@@ -1,7 +1,9 @@
 package kr.hhplus.be.server.domain.repository
 
+import kr.hhplus.be.server.domain.entity.BookingSagaEntity
 import kr.hhplus.be.server.domain.entity.ConcertEntity
 import kr.hhplus.be.server.domain.entity.ConcertScheduleEntity
+import kr.hhplus.be.server.domain.entity.OutboxEventEntity
 import kr.hhplus.be.server.domain.entity.PaymentEntity
 import kr.hhplus.be.server.domain.entity.PointTransactionEntity
 import kr.hhplus.be.server.domain.entity.QueueTokenEntity
@@ -13,7 +15,9 @@ import kr.hhplus.be.server.domain.entity.SeatHoldItemEntity
 import kr.hhplus.be.server.domain.entity.UserEntity
 import kr.hhplus.be.server.domain.entity.UserPointEntity
 import kr.hhplus.be.server.domain.entity.UserSessionEntity
+import kr.hhplus.be.server.domain.enums.BookingSagaStatus
 import kr.hhplus.be.server.domain.enums.HoldStatus
+import kr.hhplus.be.server.domain.enums.OutboxEventStatus
 import kr.hhplus.be.server.domain.enums.PaymentStatus
 import kr.hhplus.be.server.domain.enums.QueueStatus
 import kr.hhplus.be.server.domain.enums.ReservationStatus
@@ -123,4 +127,25 @@ interface PointTransactionRepository : JpaRepository<PointTransactionEntity, Str
 
 interface PaymentRepository : JpaRepository<PaymentEntity, Long> {
     fun findTopByReservationIdAndPaymentStatusOrderByIdDesc(reservationId: Long, paymentStatus: PaymentStatus): PaymentEntity?
+}
+
+interface OutboxEventRepository : JpaRepository<OutboxEventEntity, Long> {
+    fun findByEventKey(eventKey: String): OutboxEventEntity?
+
+    @Query(
+        """
+        select e from OutboxEventEntity e
+        where e.eventStatus in :statuses
+        order by e.createdAt asc
+        """,
+    )
+    fun findTop100ByEventStatusInOrderByCreatedAtAsc(@Param("statuses") statuses: Collection<OutboxEventStatus>): List<OutboxEventEntity>
+}
+
+interface BookingSagaRepository : JpaRepository<BookingSagaEntity, Long> {
+    fun findBySagaId(sagaId: String): BookingSagaEntity?
+    fun findByReservationId(reservationId: Long): BookingSagaEntity?
+
+    @Query("select count(b) > 0 from BookingSagaEntity b where b.sagaStatus = :status")
+    fun existsBySagaStatus(@Param("status") status: BookingSagaStatus): Boolean
 }

@@ -4,7 +4,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty
 
-@SpringBootTest(classes = [ServerApplication::class])
+@SpringBootTest(classes = [ServerApplication::class], webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @EnabledIfSystemProperty(named = "local.integration.enabled", matches = "true")
 class LocalReservationIntegrationTest : AbstractReservationIntegrationScenarioTest()

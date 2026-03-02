@@ -178,6 +178,7 @@ class PayReservationUseCase(
     private val pointPort: PointPort,
     private val seatLoadPort: SeatLoadPort,
     private val holdPort: HoldPort,
+    private val reservationPaymentEventPublisher: ReservationPaymentEventPublisher,
     private val lockExecutor: DistributedLockExecutor,
     private val transactionTemplate: TransactionTemplate,
     private val clock: Clock,
@@ -206,6 +207,19 @@ class PayReservationUseCase(
                     seatLoadPort.markSeatsSold(reservation.seatIds)
                     val payment = paymentPort.createSuccessPayment(reservationId, amount, method, now)
                     queuePort.expireAfterPayment(validatedQueueToken)
+                    reservationPaymentEventPublisher.completed(
+                        ReservationPaymentCompletedEvent(
+                            reservationId = reservation.reservationId,
+                            userId = reservation.userId,
+                            concertId = reservation.concertId,
+                            scheduleId = reservation.scheduleId,
+                            seatIds = reservation.seatIds,
+                            paymentId = payment.paymentId,
+                            amount = payment.amount,
+                            method = method,
+                            paidAt = payment.paidAt,
+                        ),
+                    )
                     PaymentResponse(payment.paymentId, payment.reservationId, payment.amount, payment.status, payment.paidAt)
                 } catch (ex: RuntimeException) {
                     paymentPort.createFailedPayment(reservationId, amount, method, now, ex.message ?: "payment failed")

@@ -175,3 +175,33 @@ data class PaymentResponse(
     val status: String,
     val paidAt: LocalDateTime,
 )
+
+data class OutboxEventSummaryResponse(
+    val outboxEventId: Long,
+    val eventKey: String,
+    val sagaId: String,
+    val aggregateType: String,
+    val aggregateId: Long,
+    val eventType: String,
+    val eventStatus: String,
+    val retryCount: Int,
+    val publishedAt: LocalDateTime?,
+    val createdAt: LocalDateTime,
+    val lastError: String?,
+)
+
+data class OutboxEventListResponse(
+    val items: List<OutboxEventSummaryResponse>,
+)
+
+data class BookingSagaResponse(
+    val sagaId: String,
+    val reservationId: Long,
+    val sagaType: String,
+    val sagaStatus: String,
+    val currentStep: String,
+    val startedAt: LocalDateTime,
+    val completedAt: LocalDateTime?,
+    val failedAt: LocalDateTime?,
+    val failureReason: String?,
+)
