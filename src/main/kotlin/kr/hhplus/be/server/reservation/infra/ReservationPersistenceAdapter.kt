@@ -5,6 +5,7 @@ import kr.hhplus.be.server.api.ReservationResponse
 import kr.hhplus.be.server.common.cache.ConcertCacheService
 import kr.hhplus.be.server.common.ConflictException
 import kr.hhplus.be.server.common.NotFoundException
+import kr.hhplus.be.server.common.ranking.ConcertRankingService
 import kr.hhplus.be.server.domain.entity.PaymentEntity
 import kr.hhplus.be.server.domain.entity.PointTransactionEntity
 import kr.hhplus.be.server.domain.entity.ReservationEntity
@@ -42,6 +43,7 @@ import kr.hhplus.be.server.reservation.domain.SeatSnapshot
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Component
+import java.time.Clock
 import java.time.LocalDateTime
 import java.util.UUID
 
@@ -60,6 +62,8 @@ class ReservationPersistenceAdapter(
     private val userRepository: UserRepository,
     private val queueService: QueueService,
     private val concertCacheService: ConcertCacheService,
+    private val concertRankingService: ConcertRankingService,
+    private val clock: Clock,
 ) : ReservationQueuePort, SeatLoadPort, HoldPort, ReservationPort, PaymentPort, PointPort {
     override fun validateForRead(queueToken: String, userId: Long, concertId: Long?) {
         queueService.validateQueueTokenForRead(queueToken, userId, concertId)
@@ -88,6 +92,7 @@ class ReservationPersistenceAdapter(
         val seats = seatRepository.findAllForUpdate(seatIds)
         seats.forEach { it.seatStatus = SeatStatus.SOLD }
         evictScheduleCaches(seats)
+        recordFastSoldOutSchedules(seats, LocalDateTime.now(clock))
     }
 
     override fun markSeatsAvailable(seatIds: List<Long>) {
@@ -315,5 +320,11 @@ class ReservationPersistenceAdapter(
             .forEach { schedule ->
                 concertCacheService.evictScheduleView(schedule.concert.id!!, schedule.id!!)
             }
+    }
+
+    private fun recordFastSoldOutSchedules(seats: List<kr.hhplus.be.server.domain.entity.SeatEntity>, soldOutAt: LocalDateTime) {
+        seats.map { it.schedule }.distinctBy { it.id!! }
+            .filter { schedule -> !seatRepository.existsByScheduleIdAndSeatStatusNot(schedule.id!!, SeatStatus.SOLD) }
+            .forEach { schedule -> concertRankingService.recordFastSoldOut(schedule, soldOutAt) }
     }
 }

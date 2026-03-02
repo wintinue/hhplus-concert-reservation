@@ -57,6 +57,15 @@ class ConcertController(
         return concertFacadeService.getConcerts(page, size)
     }
 
+    @GetMapping("/concerts/rankings/fast-sold-out")
+    fun getFastSoldOutConcerts(
+        @RequestHeader("Authorization") authorization: String,
+        @RequestParam(defaultValue = "10") limit: Int,
+    ): FastSoldOutConcertListResponse {
+        authService.requireUser(authorization)
+        return concertFacadeService.getFastSoldOutConcerts(limit)
+    }
+
     @GetMapping("/concerts/{concertId}/schedules")
     fun getSchedules(
         @RequestHeader("Authorization") authorization: String,

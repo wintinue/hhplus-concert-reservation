@@ -2,6 +2,7 @@ package kr.hhplus.be.server.service
 
 import kr.hhplus.be.server.api.ConcertListResponse
 import kr.hhplus.be.server.api.ConcertSummary
+import kr.hhplus.be.server.api.FastSoldOutConcertListResponse
 import kr.hhplus.be.server.api.PointBalanceResponse
 import kr.hhplus.be.server.api.PointChargeResponse
 import kr.hhplus.be.server.api.ScheduleListResponse
@@ -10,6 +11,7 @@ import kr.hhplus.be.server.api.SeatListResponse
 import kr.hhplus.be.server.api.SeatSummary
 import kr.hhplus.be.server.common.cache.ConcertCacheService
 import kr.hhplus.be.server.common.lock.DistributedLockExecutor
+import kr.hhplus.be.server.common.ranking.ConcertRankingService
 import kr.hhplus.be.server.common.NotFoundException
 import kr.hhplus.be.server.common.ValidationException
 import kr.hhplus.be.server.domain.entity.PointTransactionEntity
@@ -45,6 +47,7 @@ class ConcertFacadeService(
     private val holdPort: HoldPort,
     private val reservationPort: ReservationPort,
     private val concertCacheService: ConcertCacheService,
+    private val concertRankingService: ConcertRankingService,
     private val lockExecutor: DistributedLockExecutor,
     private val transactionTemplate: TransactionTemplate,
     private val clock: Clock,
@@ -64,6 +67,10 @@ class ConcertFacadeService(
             )
         }
     }
+
+    @Transactional(readOnly = true)
+    fun getFastSoldOutConcerts(limit: Int): FastSoldOutConcertListResponse =
+        concertRankingService.getFastSoldOutConcerts(limit)
 
     @Transactional
     fun getSchedules(user: UserEntity, concertId: Long, queueToken: String): ScheduleListResponse {
