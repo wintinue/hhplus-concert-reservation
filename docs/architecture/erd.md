@@ -1,6 +1,6 @@
 # 콘서트 예약 서비스 ERD (OpenAPI 0.1.0 기준)
 
-기준 스펙: `docs/openapi.yaml`
+기준 스펙: `docs/architecture/openapi.yaml`
 
 ## 1. 엔터티 요약
 
