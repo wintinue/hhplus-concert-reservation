@@ -12,9 +12,15 @@ import kr.hhplus.be.server.reservation.application.PayReservationUseCase
 import kr.hhplus.be.server.reservation.application.PaymentPort
 import kr.hhplus.be.server.reservation.application.PointPort
 import kr.hhplus.be.server.reservation.application.ReservationPaymentEventPublisher
+import kr.hhplus.be.server.reservation.application.ReservationOutboxRelay
+import kr.hhplus.be.server.reservation.application.ReservationPaymentSagaService
 import kr.hhplus.be.server.reservation.application.ReservationPort
 import kr.hhplus.be.server.reservation.application.ReservationQueuePort
 import kr.hhplus.be.server.reservation.application.SeatLoadPort
+import io.mockk.just
+import io.mockk.mockk
+import io.mockk.runs
+import io.mockk.every
 import kr.hhplus.be.server.reservation.domain.HoldSnapshot
 import kr.hhplus.be.server.reservation.domain.PaymentSnapshot
 import kr.hhplus.be.server.reservation.domain.ReservationSnapshot
@@ -34,7 +40,6 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
-import org.springframework.context.ApplicationEventPublisher
 
 class ConcurrencyRuleTest {
     private val clock = Clock.fixed(Instant.parse("2026-03-01T00:00:00Z"), ZoneOffset.UTC)
@@ -42,7 +47,13 @@ class ConcurrencyRuleTest {
         override fun <T> execute(key: String, action: () -> T): T = action()
     }
     private val transactionTemplate = TransactionTemplate(NoopTransactionManager())
-    private val eventPublisher = ReservationPaymentEventPublisher(ApplicationEventPublisher { })
+    private val sagaService = mockk<ReservationPaymentSagaService>().also {
+        every { it.start(any()) } returns "event-key"
+    }
+    private val outboxRelay = mockk<ReservationOutboxRelay>().also {
+        every { it.publishByEventKey(any()) } just runs
+    }
+    private val eventPublisher = ReservationPaymentEventPublisher(sagaService, outboxRelay)
 
     @Test
     fun `동일 좌석에 대한 동시 선점 요청은 하나만 성공해야 한다`() {
