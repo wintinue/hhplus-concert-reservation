@@ -49,6 +49,7 @@ interface ConcertScheduleRepository : JpaRepository<ConcertScheduleEntity, Long>
 
 interface SeatRepository : JpaRepository<SeatEntity, Long> {
     fun findByScheduleIdOrderById(scheduleId: Long): List<SeatEntity>
+    fun existsByScheduleIdAndSeatStatusNot(scheduleId: Long, seatStatus: SeatStatus): Boolean
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from SeatEntity s where s.id in :seatIds order by s.id asc")

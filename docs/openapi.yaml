@@ -79,6 +79,32 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /api/v1/concerts/rankings/fast-sold-out:
+    get:
+      tags: [Concert]
+      summary: 빠른 매진 랭킹 조회
+      operationId: getFastSoldOutConcerts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        "200":
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FastSoldOutConcertListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /api/v1/concerts/{concertId}/schedules:
     get:
       tags: [Concert]
@@ -782,6 +808,41 @@ components:
           type: integer
         total:
           type: integer
+
+    FastSoldOutConcertSummary:
+      type: object
+      required: [rank, concertId, scheduleId, title, venueName, bookingOpenAt, soldOutAt, soldOutSeconds]
+      properties:
+        rank:
+          type: integer
+        concertId:
+          type: integer
+          format: int64
+        scheduleId:
+          type: integer
+          format: int64
+        title:
+          type: string
+        venueName:
+          type: string
+        bookingOpenAt:
+          type: string
+          format: date-time
+        soldOutAt:
+          type: string
+          format: date-time
+        soldOutSeconds:
+          type: integer
+          format: int64
+
+    FastSoldOutConcertListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/FastSoldOutConcertSummary"
 
     ScheduleSummary:
       type: object

@@ -34,6 +34,21 @@ data class ConcertListResponse(
     val total: Long,
 )
 
+data class FastSoldOutConcertSummary(
+    val rank: Int,
+    val concertId: Long,
+    val scheduleId: Long,
+    val title: String,
+    val venueName: String,
+    val bookingOpenAt: LocalDateTime,
+    val soldOutAt: LocalDateTime,
+    val soldOutSeconds: Long,
+)
+
+data class FastSoldOutConcertListResponse(
+    val items: List<FastSoldOutConcertSummary>,
+)
+
 data class ScheduleSummary(
     val scheduleId: Long,
     val startAt: LocalDateTime,

@@ -2,6 +2,7 @@ package kr.hhplus.be.server
 
 import kr.hhplus.be.server.common.cache.ConcertCacheService
 import kr.hhplus.be.server.common.lock.DistributedLockExecutor
+import kr.hhplus.be.server.common.ranking.ConcertRankingService
 import kr.hhplus.be.server.common.ValidationException
 import kr.hhplus.be.server.domain.entity.ConcertEntity
 import kr.hhplus.be.server.domain.entity.ConcertScheduleEntity
@@ -49,6 +50,7 @@ class ConcertFacadeServiceTest {
     private val holdPort = mockk<HoldPort>(relaxed = true)
     private val reservationPort = mockk<ReservationPort>(relaxed = true)
     private val concertCacheService = mockk<ConcertCacheService>()
+    private val concertRankingService = mockk<ConcertRankingService>(relaxed = true)
     private val lockExecutor = object : DistributedLockExecutor {
         override fun <T> execute(key: String, action: () -> T): T = action()
     }
@@ -64,6 +66,7 @@ class ConcertFacadeServiceTest {
         holdPort,
         reservationPort,
         concertCacheService,
+        concertRankingService,
         lockExecutor,
         transactionTemplate,
         clock,
