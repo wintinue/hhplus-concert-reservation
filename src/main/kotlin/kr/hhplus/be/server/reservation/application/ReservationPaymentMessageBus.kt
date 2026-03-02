@@ -65,6 +65,10 @@ class ReservationPaymentKafkaConsumer(
         acknowledgment: Acknowledgment,
     ) {
         try {
+            if (reservationPaymentSagaService.isCompleted(message.sagaId)) {
+                acknowledgment.acknowledge()
+                return
+            }
             reservationDataPlatformPort.sendReservationPayment(message.payload)
             reservationPaymentSagaService.markCompleted(message.sagaId)
             acknowledgment.acknowledge()

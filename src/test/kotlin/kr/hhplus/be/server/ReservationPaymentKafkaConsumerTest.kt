@@ -23,6 +23,7 @@ class ReservationPaymentKafkaConsumerTest {
         val acknowledgment = mockk<Acknowledgment>()
         val consumer = ReservationPaymentKafkaConsumer(dataPlatformPort, sagaService)
 
+        every { sagaService.isCompleted("saga-1") } returns false
         every { dataPlatformPort.sendReservationPayment(any()) } just runs
         every { sagaService.markCompleted("saga-1") } just runs
         every { acknowledgment.acknowledge() } just runs
@@ -34,12 +35,31 @@ class ReservationPaymentKafkaConsumerTest {
         verify { acknowledgment.acknowledge() }
     }
 
+    @Test
+    fun `consumer는 이미 완료된 saga면 데이터 플랫폼에 중복 전송하지 않고 ack 한다`() {
+        val dataPlatformPort = mockk<ReservationDataPlatformPort>()
+        val sagaService = mockk<ReservationPaymentSagaService>()
+        val acknowledgment = mockk<Acknowledgment>()
+        val consumer = ReservationPaymentKafkaConsumer(dataPlatformPort, sagaService)
+
+        every { sagaService.isCompleted("saga-1") } returns true
+        every { acknowledgment.acknowledge() } just runs
+
+        consumer.consume(message(), acknowledgment)
+
+        verify(exactly = 0) { dataPlatformPort.sendReservationPayment(any()) }
+        verify(exactly = 0) { sagaService.markCompleted(any()) }
+        verify { acknowledgment.acknowledge() }
+    }
+
+    @Test
     fun `consumer는 데이터 플랫폼 전송 실패 시 saga를 failed 처리하고 예외를 다시 던진다`() {
         val dataPlatformPort = mockk<ReservationDataPlatformPort>()
         val sagaService = mockk<ReservationPaymentSagaService>()
         val acknowledgment = mockk<Acknowledgment>(relaxed = true)
         val consumer = ReservationPaymentKafkaConsumer(dataPlatformPort, sagaService)
 
+        every { sagaService.isCompleted("saga-1") } returns false
         every { dataPlatformPort.sendReservationPayment(any()) } throws IllegalStateException("downstream timeout")
         every { sagaService.markFailed("saga-1", "downstream timeout") } just runs
 

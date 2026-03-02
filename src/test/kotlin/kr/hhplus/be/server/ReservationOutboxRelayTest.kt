@@ -14,6 +14,7 @@ import kr.hhplus.be.server.reservation.application.ReservationPaymentKafkaMessag
 import kr.hhplus.be.server.reservation.application.ReservationPaymentMessagePublisher
 import kr.hhplus.be.server.reservation.application.ReservationPaymentPayload
 import kr.hhplus.be.server.reservation.application.ReservationPaymentPublishResult
+import kr.hhplus.be.server.reservation.application.ReservationOutboxStateService
 import kr.hhplus.be.server.reservation.application.ReservationPaymentSagaService
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -31,16 +32,17 @@ class ReservationOutboxRelayTest {
         val outboxEventRepository = mockk<OutboxEventRepository>()
         val messagePublisher = mockk<ReservationPaymentMessagePublisher>(relaxed = true)
         val sagaService = mockk<ReservationPaymentSagaService>(relaxed = true)
+        val outboxStateService = mockk<ReservationOutboxStateService>()
         val relay = ReservationOutboxRelay(
             reservationPaymentMessagePublisher = messagePublisher,
             reservationPaymentSagaService = sagaService,
+            reservationOutboxStateService = outboxStateService,
             outboxEventRepository = outboxEventRepository,
             objectMapper = objectMapper,
-            clock = clock,
             maxRetryCount = 3,
         )
 
-        every { outboxEventRepository.findByEventKey("event-key") } returns outboxEvent(retryCount = 3)
+        every { outboxStateService.claimForPublish("event-key", 3) } returns null
 
         relay.publishByEventKey("event-key")
 
@@ -52,25 +54,27 @@ class ReservationOutboxRelayTest {
         val outboxEventRepository = mockk<OutboxEventRepository>()
         val messagePublisher = mockk<ReservationPaymentMessagePublisher>()
         val sagaService = mockk<ReservationPaymentSagaService>()
+        val outboxStateService = mockk<ReservationOutboxStateService>()
         val relay = ReservationOutboxRelay(
             reservationPaymentMessagePublisher = messagePublisher,
             reservationPaymentSagaService = sagaService,
+            reservationOutboxStateService = outboxStateService,
             outboxEventRepository = outboxEventRepository,
             objectMapper = objectMapper,
-            clock = clock,
             maxRetryCount = 3,
         )
         val outboxEvent = outboxEvent(retryCount = 1)
 
         every { messagePublisher.publish(any()) } throws IllegalStateException("mock api down")
-        every { outboxEventRepository.save(any()) } answers { firstArg() }
+        every { outboxStateService.claimForPublish("event-key", 3) } returns outboxEvent.apply { eventStatus = OutboxEventStatus.PROCESSING }
+        every { outboxStateService.markFailed("event-key", "mock api down") } returns 2
         every { sagaService.markFailed("saga-1", "mock api down") } just runs
 
         assertThrows<IllegalStateException> {
             relay.publish(outboxEvent)
         }
 
-        verify { outboxEventRepository.save(match { it.retryCount == 2 && it.eventStatus == OutboxEventStatus.FAILED }) }
+        verify { outboxStateService.markFailed("event-key", "mock api down") }
         verify { sagaService.markFailed("saga-1", "mock api down") }
     }
 
@@ -79,18 +83,20 @@ class ReservationOutboxRelayTest {
         val outboxEventRepository = mockk<OutboxEventRepository>()
         val messagePublisher = mockk<ReservationPaymentMessagePublisher>()
         val sagaService = mockk<ReservationPaymentSagaService>()
+        val outboxStateService = mockk<ReservationOutboxStateService>()
         val relay = ReservationOutboxRelay(
             reservationPaymentMessagePublisher = messagePublisher,
             reservationPaymentSagaService = sagaService,
+            reservationOutboxStateService = outboxStateService,
             outboxEventRepository = outboxEventRepository,
             objectMapper = objectMapper,
-            clock = clock,
             maxRetryCount = 3,
         )
         val outboxEvent = outboxEvent(retryCount = 0).apply { eventStatus = OutboxEventStatus.PENDING }
 
         every { messagePublisher.publish(any()) } returns ReservationPaymentPublishResult.DISPATCHED
-        every { outboxEventRepository.save(any()) } answers { firstArg() }
+        every { outboxStateService.claimForPublish("event-key", 3) } returns outboxEvent.apply { eventStatus = OutboxEventStatus.PROCESSING }
+        every { outboxStateService.markPublished("event-key") } returns Unit
         every { sagaService.markDispatched("saga-1") } just runs
 
         relay.publish(outboxEvent)
@@ -102,8 +108,31 @@ class ReservationOutboxRelayTest {
                 },
             )
         }
-        verify { outboxEventRepository.save(match { it.eventStatus == OutboxEventStatus.PUBLISHED && it.publishedAt != null }) }
+        verify { outboxStateService.markPublished("event-key") }
         verify { sagaService.markDispatched("saga-1") }
+    }
+
+    @Test
+    fun `이미 선점된 outbox 이벤트는 중복 발행하지 않는다`() {
+        val outboxEventRepository = mockk<OutboxEventRepository>()
+        val messagePublisher = mockk<ReservationPaymentMessagePublisher>(relaxed = true)
+        val sagaService = mockk<ReservationPaymentSagaService>(relaxed = true)
+        val outboxStateService = mockk<ReservationOutboxStateService>()
+        val relay = ReservationOutboxRelay(
+            reservationPaymentMessagePublisher = messagePublisher,
+            reservationPaymentSagaService = sagaService,
+            reservationOutboxStateService = outboxStateService,
+            outboxEventRepository = outboxEventRepository,
+            objectMapper = objectMapper,
+            maxRetryCount = 3,
+        )
+
+        every { outboxStateService.claimForPublish("event-key", 3) } returns null
+
+        relay.publishByEventKey("event-key")
+
+        verify(exactly = 1) { outboxStateService.claimForPublish("event-key", 3) }
+        verify(exactly = 0) { messagePublisher.publish(any()) }
     }
 
     private fun outboxEvent(retryCount: Int): OutboxEventEntity =

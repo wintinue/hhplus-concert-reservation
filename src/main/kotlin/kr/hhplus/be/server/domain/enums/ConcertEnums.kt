@@ -56,6 +56,7 @@ enum class ScheduleStatus {
 
 enum class OutboxEventStatus {
     PENDING,
+    PROCESSING,
     PUBLISHED,
     FAILED,
 }
