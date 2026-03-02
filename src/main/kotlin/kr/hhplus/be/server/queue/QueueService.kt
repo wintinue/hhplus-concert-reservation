@@ -12,10 +12,12 @@ import kr.hhplus.be.server.domain.entity.UserEntity
 import kr.hhplus.be.server.domain.enums.QueueStatus
 import kr.hhplus.be.server.domain.repository.ConcertRepository
 import kr.hhplus.be.server.domain.repository.QueueTokenRepository
+import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Clock
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 
@@ -23,14 +25,13 @@ import java.util.UUID
 class QueueService(
     private val concertRepository: ConcertRepository,
     private val queueTokenRepository: QueueTokenRepository,
+    private val redisTemplate: StringRedisTemplate,
     private val clock: Clock,
 ) {
-    // TODO: 현재는 MySQL + 애플리케이션 체크 + 락으로 활성 queue token 중복을 방지한다.
-    // 후속 고도화 시 active_slot 기반 유니크 또는 활성/이력 테이블 분리를 먼저 검토하고,
-    // Redis 대기열 전환은 그 다음 단계에서 고려한다.
     @Transactional
     fun issueToken(user: UserEntity, concertId: Long): QueueTokenIssueResponse {
         val concert = concertRepository.findByIdForUpdate(concertId) ?: throw NotFoundException("CONCERT", concertId)
+        syncRedisQueueState(concert)
         val active = queueTokenRepository.findActiveToken(user.id!!, concertId, activeStatuses())
         if (active != null) {
             throw ConflictException(
@@ -53,8 +54,13 @@ class QueueService(
             reservationWindowExpiresAt = if (admitted) now.plusMinutes(10) else null,
             refreshedAt = now,
         )
-        queueTokenRepository.save(token)
-        return token.toIssueResponse()
+        val saved = queueTokenRepository.save(token)
+        if (saved.queueStatus == QueueStatus.ADMITTED) {
+            redisTemplate.opsForZSet().add(activeKey(concertId), saved.queueToken, saved.reservationWindowExpiresAt!!.toEpochScore())
+        } else {
+            redisTemplate.opsForZSet().add(waitingKey(concertId), saved.queueToken, saved.queueNumber.toDouble())
+        }
+        return saved.toIssueResponse()
     }
 
     @Transactional
@@ -67,12 +73,14 @@ class QueueService(
         if (current.queueStatus == QueueStatus.EXPIRED) {
             throw QueueExpiredException("대기열 토큰이 만료되었습니다.", current.queueStatus.name, current.expiresAt)
         }
-        val waiting = queueTokenRepository.findByConcertAndStatusOrderByQueueNumber(current.concert.id!!, QueueStatus.WAITING)
-        val aheadCount = waiting.count { it.queueNumber < current.queueNumber }.toLong()
+        val waitingOps = redisTemplate.opsForZSet()
+        val rank = waitingOps.rank(waitingKey(current.concert.id!!), queueToken)
+        val totalWaitingCount = waitingOps.zCard(waitingKey(current.concert.id!!)) ?: 0L
+        val aheadCount = if (current.queueStatus == QueueStatus.WAITING && rank != null) rank else 0L
         val currentPosition = if (current.queueStatus == QueueStatus.WAITING) aheadCount + 1 else 1
         val remaining = if (current.queueStatus == QueueStatus.WAITING) aheadCount * 30 else 0
         current.refreshedAt = now
-        return queueTokenRepository.save(current).toPositionResponse(currentPosition, aheadCount, waiting.size.toLong(), remaining)
+        return queueTokenRepository.save(current).toPositionResponse(currentPosition, aheadCount, totalWaitingCount, remaining)
     }
 
     @Transactional
@@ -95,7 +103,9 @@ class QueueService(
         if (token.queueStatus == QueueStatus.ADMITTED) {
             token.queueStatus = QueueStatus.IN_PROGRESS
         }
-        return queueTokenRepository.save(token)
+        val saved = queueTokenRepository.save(token)
+        redisTemplate.opsForZSet().add(activeKey(saved.concert.id!!), saved.queueToken, admissionExpiry(saved).toEpochScore())
+        return saved
     }
 
     @Transactional
@@ -105,6 +115,7 @@ class QueueService(
         queueToken.expiresAt = now
         queueToken.reservationWindowExpiresAt = now
         queueTokenRepository.save(queueToken)
+        removeFromRedis(queueToken)
     }
 
     @Transactional
@@ -136,23 +147,68 @@ class QueueService(
 
     private fun refreshStatuses(concert: ConcertEntity) {
         concertRepository.findByIdForUpdate(concert.id!!) ?: throw NotFoundException("CONCERT", concert.id!!)
+        syncRedisQueueState(concert)
         val now = LocalDateTime.now(clock)
-        val admitted = queueTokenRepository.findByConcertAndStatusOrderByQueueNumber(concert.id!!, QueueStatus.ADMITTED)
-        admitted.filter { it.reservationWindowExpiresAt != null && it.reservationWindowExpiresAt!!.isBefore(now) }.forEach {
-            it.queueStatus = QueueStatus.EXPIRED
-            queueTokenRepository.save(it)
+        val activeKey = activeKey(concert.id!!)
+        val waitingKey = waitingKey(concert.id!!)
+        val expiredTokens = redisTemplate.opsForZSet()
+            .rangeByScore(activeKey, Double.NEGATIVE_INFINITY, now.toEpochScore())
+            .orEmpty()
+
+        expiredTokens.forEach { expiredToken ->
+            val entity = queueTokenRepository.findById(expiredToken).orElse(null)
+            if (entity != null && entity.queueStatus != QueueStatus.EXPIRED) {
+                entity.queueStatus = QueueStatus.EXPIRED
+                entity.expiresAt = now
+                entity.reservationWindowExpiresAt = now
+                queueTokenRepository.save(entity)
+            }
+            redisTemplate.opsForZSet().remove(activeKey, expiredToken)
         }
-        val activeAdmitted = queueTokenRepository.findByConcertAndStatusOrderByQueueNumber(concert.id!!, QueueStatus.ADMITTED)
-        if (activeAdmitted.isEmpty()) {
-            val waiting = queueTokenRepository.findByConcertAndStatusOrderByQueueNumber(concert.id!!, QueueStatus.WAITING)
-            val next = waiting.firstOrNull()
-            if (next != null) {
+
+        val activeCount = redisTemplate.opsForZSet().zCard(activeKey) ?: 0L
+        if (activeCount == 0L) {
+            val nextToken = redisTemplate.opsForZSet().popMin(waitingKey)?.value
+            if (nextToken != null) {
+                val next = queueTokenRepository.findByIdForUpdate(nextToken) ?: throw NotFoundException("QUEUE_TOKEN", nextToken)
                 next.queueStatus = QueueStatus.ADMITTED
                 next.reservationWindowExpiresAt = now.plusMinutes(10)
                 queueTokenRepository.save(next)
+                redisTemplate.opsForZSet().add(activeKey, next.queueToken, next.reservationWindowExpiresAt!!.toEpochScore())
             }
         }
     }
+
+    private fun syncRedisQueueState(concert: ConcertEntity) {
+        val concertId = concert.id!!
+        val waitingKey = waitingKey(concertId)
+        val activeKey = activeKey(concertId)
+        val waitingCount = redisTemplate.opsForZSet().zCard(waitingKey) ?: 0L
+        val activeCount = redisTemplate.opsForZSet().zCard(activeKey) ?: 0L
+        if (waitingCount > 0 || activeCount > 0) return
+
+        queueTokenRepository.findByConcertAndStatusOrderByQueueNumber(concertId, QueueStatus.WAITING)
+            .forEach { redisTemplate.opsForZSet().add(waitingKey, it.queueToken, it.queueNumber.toDouble()) }
+
+        queueTokenRepository.findByConcertAndStatusOrderByQueueNumber(concertId, QueueStatus.ADMITTED)
+            .forEach { redisTemplate.opsForZSet().add(activeKey, it.queueToken, admissionExpiry(it).toEpochScore()) }
+
+        queueTokenRepository.findByConcertAndStatusOrderByQueueNumber(concertId, QueueStatus.IN_PROGRESS)
+            .forEach { redisTemplate.opsForZSet().add(activeKey, it.queueToken, admissionExpiry(it).toEpochScore()) }
+    }
+
+    private fun removeFromRedis(queueToken: QueueTokenEntity) {
+        val concertId = queueToken.concert.id!!
+        redisTemplate.opsForZSet().remove(waitingKey(concertId), queueToken.queueToken)
+        redisTemplate.opsForZSet().remove(activeKey(concertId), queueToken.queueToken)
+    }
+
+    private fun admissionExpiry(queueToken: QueueTokenEntity): LocalDateTime =
+        queueToken.reservationWindowExpiresAt ?: queueToken.expiresAt
+
+    private fun waitingKey(concertId: Long) = "queue:concert:$concertId:waiting"
+
+    private fun activeKey(concertId: Long) = "queue:concert:$concertId:active"
 
     private fun QueueTokenEntity.toIssueResponse() = QueueTokenIssueResponse(
         queueToken = queueToken,
@@ -188,4 +244,6 @@ class QueueService(
     )
 
     private fun activeStatuses() = listOf(QueueStatus.WAITING, QueueStatus.ADMITTED, QueueStatus.IN_PROGRESS)
+
+    private fun LocalDateTime.toEpochScore(): Double = toInstant(ZoneOffset.UTC).toEpochMilli().toDouble()
 }
