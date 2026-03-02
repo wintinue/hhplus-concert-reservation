@@ -1,5 +1,7 @@
 package kr.hhplus.be.server
 
+import kr.hhplus.be.server.common.cache.ConcertCacheService
+import kr.hhplus.be.server.common.lock.DistributedLockExecutor
 import kr.hhplus.be.server.common.ValidationException
 import kr.hhplus.be.server.domain.entity.ConcertEntity
 import kr.hhplus.be.server.domain.entity.ConcertScheduleEntity
@@ -24,6 +26,12 @@ import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.TransactionDefinition
+import org.springframework.transaction.TransactionException
+import org.springframework.transaction.TransactionStatus
+import org.springframework.transaction.support.SimpleTransactionStatus
+import org.springframework.transaction.support.TransactionTemplate
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDateTime
@@ -40,6 +48,11 @@ class ConcertFacadeServiceTest {
     private val queueService = mockk<QueueService>(relaxed = true)
     private val holdPort = mockk<HoldPort>(relaxed = true)
     private val reservationPort = mockk<ReservationPort>(relaxed = true)
+    private val concertCacheService = mockk<ConcertCacheService>()
+    private val lockExecutor = object : DistributedLockExecutor {
+        override fun <T> execute(key: String, action: () -> T): T = action()
+    }
+    private val transactionTemplate = TransactionTemplate(NoopTransactionManager())
 
     private val service = ConcertFacadeService(
         concertRepository,
@@ -50,6 +63,9 @@ class ConcertFacadeServiceTest {
         queueService,
         holdPort,
         reservationPort,
+        concertCacheService,
+        lockExecutor,
+        transactionTemplate,
         clock,
     )
 
@@ -67,6 +83,10 @@ class ConcertFacadeServiceTest {
     @Test
     fun `getConcerts는 페이지 응답을 반환한다`() {
         val concert = concertEntity()
+        every { concertCacheService.getConcerts(0, 20, any()) } answers {
+            @Suppress("UNCHECKED_CAST")
+            (args[2] as () -> kr.hhplus.be.server.api.ConcertListResponse).invoke()
+        }
         every { concertRepository.findAll(org.springframework.data.domain.PageRequest.of(0, 20)) } returns
             org.springframework.data.domain.PageImpl(listOf(concert), org.springframework.data.domain.PageRequest.of(0, 20), 1)
 
@@ -81,6 +101,10 @@ class ConcertFacadeServiceTest {
         val user = userEntity()
         val concert = concertEntity()
         val schedule = scheduleEntity(concert)
+        every { concertCacheService.getSchedules(1L, any()) } answers {
+            @Suppress("UNCHECKED_CAST")
+            (args[1] as () -> kr.hhplus.be.server.api.ScheduleListResponse).invoke()
+        }
         every { concertRepository.findById(1L) } returns Optional.of(concert)
         every { scheduleRepository.findByConcertIdAndStatusOrderByStartAt(1L, ScheduleStatus.OPEN) } returns listOf(schedule)
         every { seatRepository.findByScheduleIdOrderById(1L) } returns
@@ -101,6 +125,10 @@ class ConcertFacadeServiceTest {
         val user = userEntity()
         val concert = concertEntity()
         val schedule = scheduleEntity(concert)
+        every { concertCacheService.getSeats(1L, any()) } answers {
+            @Suppress("UNCHECKED_CAST")
+            (args[1] as () -> kr.hhplus.be.server.api.SeatListResponse).invoke()
+        }
         every { scheduleRepository.findById(1L) } returns Optional.of(schedule)
         every { seatRepository.findByScheduleIdOrderById(1L) } returns listOf(seatEntity(schedule, 1L, SeatStatus.AVAILABLE))
 
@@ -161,4 +189,10 @@ class ConcertFacadeServiceTest {
         price = 50000L,
         seatStatus = status,
     ).apply { this.id = id }
+
+    private class NoopTransactionManager : PlatformTransactionManager {
+        override fun getTransaction(definition: TransactionDefinition?): TransactionStatus = SimpleTransactionStatus()
+        override fun commit(status: TransactionStatus) = Unit
+        override fun rollback(status: TransactionStatus) = Unit
+    }
 }

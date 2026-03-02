@@ -8,6 +8,8 @@ import kr.hhplus.be.server.api.ScheduleListResponse
 import kr.hhplus.be.server.api.ScheduleSummary
 import kr.hhplus.be.server.api.SeatListResponse
 import kr.hhplus.be.server.api.SeatSummary
+import kr.hhplus.be.server.common.cache.ConcertCacheService
+import kr.hhplus.be.server.common.lock.DistributedLockExecutor
 import kr.hhplus.be.server.common.NotFoundException
 import kr.hhplus.be.server.common.ValidationException
 import kr.hhplus.be.server.domain.entity.PointTransactionEntity
@@ -27,6 +29,7 @@ import kr.hhplus.be.server.reservation.application.ReservationPort
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionTemplate
 import java.time.Clock
 import java.time.LocalDateTime
 import java.util.UUID
@@ -41,20 +44,25 @@ class ConcertFacadeService(
     private val queueService: QueueService,
     private val holdPort: HoldPort,
     private val reservationPort: ReservationPort,
+    private val concertCacheService: ConcertCacheService,
+    private val lockExecutor: DistributedLockExecutor,
+    private val transactionTemplate: TransactionTemplate,
     private val clock: Clock,
 ) {
     @Transactional(readOnly = true)
     fun getConcerts(page: Int, size: Int): ConcertListResponse {
-        val pageable = PageRequest.of(page, size)
-        val result = concertRepository.findAll(pageable)
-        return ConcertListResponse(
-            items = result.content.map {
-                ConcertSummary(it.id!!, it.title, it.venueName, it.bookingOpenAt, it.bookingCloseAt)
-            },
-            page = result.number,
-            size = result.size,
-            total = result.totalElements,
-        )
+        return concertCacheService.getConcerts(page, size) {
+            val pageable = PageRequest.of(page, size)
+            val result = concertRepository.findAll(pageable)
+            ConcertListResponse(
+                items = result.content.map {
+                    ConcertSummary(it.id!!, it.title, it.venueName, it.bookingOpenAt, it.bookingCloseAt)
+                },
+                page = result.number,
+                size = result.size,
+                total = result.totalElements,
+            )
+        }
     }
 
     @Transactional
@@ -62,19 +70,21 @@ class ConcertFacadeService(
         holdPort.expireActiveHolds(LocalDateTime.now(clock))
         reservationPort.expirePendingReservations(LocalDateTime.now(clock))
         queueService.validateQueueTokenForRead(queueToken, user.id!!, concertId)
-        val concert = concertRepository.findById(concertId).orElseThrow { NotFoundException("CONCERT", concertId) }
-        val schedules = scheduleRepository.findByConcertIdAndStatusOrderByStartAt(concert.id!!, ScheduleStatus.OPEN)
-        return ScheduleListResponse(
-            items = schedules.map { schedule ->
-                val seats = seatRepository.findByScheduleIdOrderById(schedule.id!!)
-                ScheduleSummary(
-                    scheduleId = schedule.id!!,
-                    startAt = schedule.startAt,
-                    totalSeat = seats.size,
-                    availableSeat = seats.count { it.seatStatus == SeatStatus.AVAILABLE },
-                )
-            },
-        )
+        return concertCacheService.getSchedules(concertId) {
+            val concert = concertRepository.findById(concertId).orElseThrow { NotFoundException("CONCERT", concertId) }
+            val schedules = scheduleRepository.findByConcertIdAndStatusOrderByStartAt(concert.id!!, ScheduleStatus.OPEN)
+            ScheduleListResponse(
+                items = schedules.map { schedule ->
+                    val seats = seatRepository.findByScheduleIdOrderById(schedule.id!!)
+                    ScheduleSummary(
+                        scheduleId = schedule.id!!,
+                        startAt = schedule.startAt,
+                        totalSeat = seats.size,
+                        availableSeat = seats.count { it.seatStatus == SeatStatus.AVAILABLE },
+                    )
+                },
+            )
+        }
     }
 
     @Transactional
@@ -83,12 +93,14 @@ class ConcertFacadeService(
         reservationPort.expirePendingReservations(LocalDateTime.now(clock))
         val schedule = scheduleRepository.findById(scheduleId).orElseThrow { NotFoundException("SCHEDULE", scheduleId) }
         queueService.validateQueueTokenForRead(queueToken, user.id!!, schedule.concert.id!!)
-        val seats = seatRepository.findByScheduleIdOrderById(scheduleId)
-        return SeatListResponse(
-            items = seats.map {
-                SeatSummary(it.id!!, it.section, it.rowLabel, it.seatNumber, it.price, it.seatStatus.name)
-            },
-        )
+        return concertCacheService.getSeats(scheduleId) {
+            val seats = seatRepository.findByScheduleIdOrderById(scheduleId)
+            SeatListResponse(
+                items = seats.map {
+                    SeatSummary(it.id!!, it.section, it.rowLabel, it.seatNumber, it.price, it.seatStatus.name)
+                },
+            )
+        }
     }
 
     @Transactional(readOnly = true)
@@ -97,18 +109,21 @@ class ConcertFacadeService(
         return PointBalanceResponse(point.userId!!, point.balance, point.updatedAt)
     }
 
-    @Transactional
     fun charge(user: UserEntity, amount: Long): PointChargeResponse {
         if (amount <= 0) {
             throw ValidationException("충전 금액은 1 이상이어야 합니다.", listOf(mapOf("field" to "amount", "reason" to "must be greater than 0")))
         }
-        val now = LocalDateTime.now(clock)
-        val point = userPointRepository.findForUpdate(user.id!!) ?: userPointRepository.save(UserPointEntity(user = user, balance = 0, updatedAt = now))
-        point.balance += amount
-        point.updatedAt = now
-        val tx = pointTransactionRepository.save(
-            PointTransactionEntity(UUID.randomUUID().toString(), user, amount, PointTransactionType.CHARGE, point.balance, now),
-        )
-        return PointChargeResponse(tx.transactionId, user.id!!, amount, point.balance, now)
+        return lockExecutor.execute("point:user:${user.id!!}") {
+            transactionTemplate.execute {
+                val now = LocalDateTime.now(clock)
+                val point = userPointRepository.findForUpdate(user.id!!) ?: userPointRepository.save(UserPointEntity(user = user, balance = 0, updatedAt = now))
+                point.balance += amount
+                point.updatedAt = now
+                val tx = pointTransactionRepository.save(
+                    PointTransactionEntity(UUID.randomUUID().toString(), user, amount, PointTransactionType.CHARGE, point.balance, now),
+                )
+                PointChargeResponse(tx.transactionId, user.id!!, amount, point.balance, now)
+            } ?: error("point charge transaction returned null")
+        }
     }
 }

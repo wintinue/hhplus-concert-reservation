@@ -2,6 +2,7 @@ package kr.hhplus.be.server.reservation.infra
 
 import kr.hhplus.be.server.api.ReservationListResponse
 import kr.hhplus.be.server.api.ReservationResponse
+import kr.hhplus.be.server.common.cache.ConcertCacheService
 import kr.hhplus.be.server.common.ConflictException
 import kr.hhplus.be.server.common.NotFoundException
 import kr.hhplus.be.server.domain.entity.PaymentEntity
@@ -58,6 +59,7 @@ class ReservationPersistenceAdapter(
     private val pointTransactionRepository: PointTransactionRepository,
     private val userRepository: UserRepository,
     private val queueService: QueueService,
+    private val concertCacheService: ConcertCacheService,
 ) : ReservationQueuePort, SeatLoadPort, HoldPort, ReservationPort, PaymentPort, PointPort {
     override fun validateForRead(queueToken: String, userId: Long, concertId: Long?) {
         queueService.validateQueueTokenForRead(queueToken, userId, concertId)
@@ -77,15 +79,21 @@ class ReservationPersistenceAdapter(
         seatRepository.findAllForUpdate(seatIds).map { SeatSnapshot(it.id!!, it.schedule.id!!, it.price, it.seatStatus.name) }
 
     override fun markSeatsHeld(seatIds: List<Long>) {
-        seatRepository.findAllForUpdate(seatIds).forEach { it.seatStatus = SeatStatus.HELD }
+        val seats = seatRepository.findAllForUpdate(seatIds)
+        seats.forEach { it.seatStatus = SeatStatus.HELD }
+        evictScheduleCaches(seats)
     }
 
     override fun markSeatsSold(seatIds: List<Long>) {
-        seatRepository.findAllForUpdate(seatIds).forEach { it.seatStatus = SeatStatus.SOLD }
+        val seats = seatRepository.findAllForUpdate(seatIds)
+        seats.forEach { it.seatStatus = SeatStatus.SOLD }
+        evictScheduleCaches(seats)
     }
 
     override fun markSeatsAvailable(seatIds: List<Long>) {
-        seatRepository.findAllForUpdate(seatIds).forEach { it.seatStatus = SeatStatus.AVAILABLE }
+        val seats = seatRepository.findAllForUpdate(seatIds)
+        seats.forEach { it.seatStatus = SeatStatus.AVAILABLE }
+        evictScheduleCaches(seats)
     }
 
     override fun expireActiveHolds(now: LocalDateTime) {
@@ -301,4 +309,11 @@ class ReservationPersistenceAdapter(
         status = status,
         createdAt = createdAt,
     )
+
+    private fun evictScheduleCaches(seats: List<kr.hhplus.be.server.domain.entity.SeatEntity>) {
+        seats.map { it.schedule }.distinctBy { it.id!! }
+            .forEach { schedule ->
+                concertCacheService.evictScheduleView(schedule.concert.id!!, schedule.id!!)
+            }
+    }
 }

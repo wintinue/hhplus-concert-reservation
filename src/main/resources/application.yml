@@ -11,6 +11,10 @@ spring:
       connection-timeout: 10000
       max-lifetime: 60000
     driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: localhost
+      port: 6379
   jpa:
     open-in-view: false
     generate-ddl: true
@@ -29,3 +33,9 @@ spring:
     url: jdbc:mysql://localhost:3306/hhplus?characterEncoding=UTF-8&serverTimezone=UTC
     username: application
     password: application
+
+app:
+  lock:
+    wait-timeout-ms: 3000
+    lease-timeout-ms: 5000
+    retry-interval-ms: 50

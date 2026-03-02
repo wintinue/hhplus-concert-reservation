@@ -2,6 +2,7 @@ package kr.hhplus.be.server
 
 import kr.hhplus.be.server.common.ConflictException
 import kr.hhplus.be.server.common.NotFoundException
+import kr.hhplus.be.server.common.lock.DistributedLockExecutor
 import kr.hhplus.be.server.api.ReservationListResponse
 import kr.hhplus.be.server.reservation.application.CancelReservationUseCase
 import kr.hhplus.be.server.reservation.application.CreateReservationUseCase
@@ -19,6 +20,11 @@ import kr.hhplus.be.server.reservation.domain.ReservationSnapshot
 import kr.hhplus.be.server.reservation.domain.SeatSnapshot
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.TransactionDefinition
+import org.springframework.transaction.TransactionStatus
+import org.springframework.transaction.support.SimpleTransactionStatus
+import org.springframework.transaction.support.TransactionTemplate
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDateTime
@@ -30,6 +36,10 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class ConcurrencyRuleTest {
     private val clock = Clock.fixed(Instant.parse("2026-03-01T00:00:00Z"), ZoneOffset.UTC)
+    private val lockExecutor = object : DistributedLockExecutor {
+        override fun <T> execute(key: String, action: () -> T): T = action()
+    }
+    private val transactionTemplate = TransactionTemplate(NoopTransactionManager())
 
     @Test
     fun `동일 좌석에 대한 동시 선점 요청은 하나만 성공해야 한다`() {
@@ -41,7 +51,7 @@ class ConcurrencyRuleTest {
             scheduleConcertId = 1L,
             seats = mutableMapOf(1L to SeatSnapshot(1L, 100L, 50000L, "AVAILABLE")),
         )
-        val useCase = HoldSeatsUseCase(queuePort, seatLoadPort, holdPort, reservationPort, clock)
+        val useCase = HoldSeatsUseCase(queuePort, seatLoadPort, holdPort, reservationPort, lockExecutor, transactionTemplate, clock)
 
         val successCount = AtomicInteger()
         val conflictCount = AtomicInteger()
@@ -75,7 +85,7 @@ class ConcurrencyRuleTest {
         )
         val paymentPort = SingleSuccessPaymentPort(now)
         val pointPort = InMemoryPointPort(balance = 200000L)
-        val useCase = PayReservationUseCase(queuePort, reservationPort, paymentPort, pointPort, seatLoadPort, holdPort, clock)
+        val useCase = PayReservationUseCase(queuePort, reservationPort, paymentPort, pointPort, seatLoadPort, holdPort, lockExecutor, transactionTemplate, clock)
 
         val successCount = AtomicInteger()
         val conflictCount = AtomicInteger()
@@ -108,7 +118,7 @@ class ConcurrencyRuleTest {
                 2L to SeatSnapshot(2L, 100L, 50000L, "SOLD"),
             ),
         )
-        val useCase = CancelReservationUseCase(queuePort, reservationPort, paymentPort, pointPort, seatLoadPort, clock)
+        val useCase = CancelReservationUseCase(queuePort, reservationPort, paymentPort, pointPort, seatLoadPort, lockExecutor, transactionTemplate, clock)
 
         val successCount = AtomicInteger()
         val conflictCount = AtomicInteger()
@@ -133,7 +143,7 @@ class ConcurrencyRuleTest {
             HoldSnapshot("hold-1", 1L, 1L, 100L, "queue-token", listOf(1L), 50000L, "ACTIVE", LocalDateTime.now(clock).plusMinutes(5)),
         )
         val reservationPort = SingleHoldReservationPort()
-        val useCase = CreateReservationUseCase(queuePort, holdPort, reservationPort, clock)
+        val useCase = CreateReservationUseCase(queuePort, holdPort, reservationPort, lockExecutor, transactionTemplate, clock)
 
         val successCount = AtomicInteger()
         val conflictCount = AtomicInteger()
@@ -172,7 +182,7 @@ class ConcurrencyRuleTest {
         )
         val paymentPort = MultiReservationPaymentPort(now)
         val pointPort = InMemoryPointPort(balance = 100000L)
-        val useCase = PayReservationUseCase(queuePort, reservationPort, paymentPort, pointPort, seatLoadPort, holdPort, clock)
+        val useCase = PayReservationUseCase(queuePort, reservationPort, paymentPort, pointPort, seatLoadPort, holdPort, lockExecutor, transactionTemplate, clock)
 
         val successCount = AtomicInteger()
         val conflictCount = AtomicInteger()
@@ -285,6 +295,12 @@ class ConcurrencyRuleTest {
         override fun getHoldForUpdate(holdId: String): HoldSnapshot? = null
         override fun markHoldConfirmed(holdId: String) = Unit
         override fun markHoldExpired(holdId: String) = Unit
+    }
+
+    private class NoopTransactionManager : PlatformTransactionManager {
+        override fun getTransaction(definition: TransactionDefinition?): TransactionStatus = SimpleTransactionStatus()
+        override fun commit(status: TransactionStatus) = Unit
+        override fun rollback(status: TransactionStatus) = Unit
     }
 
     private class NoopHoldPort : HoldPort {

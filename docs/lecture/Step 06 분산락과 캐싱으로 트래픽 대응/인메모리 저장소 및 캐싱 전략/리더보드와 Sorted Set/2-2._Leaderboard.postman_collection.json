@@ -1,0 +1,51 @@
+{
+	"info": {
+		"_postman_id": "67a747e3-22ae-4b69-a8fd-e53bd4362c87",
+		"name": "2-2. Leaderboard",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "7233236"
+	},
+	"item": [
+		{
+			"name": "POST /items/{id}/purchase",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/items/1/purchase",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"items",
+						"1",
+						"purchase"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET /items/ranks",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/items/ranks",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"items",
+						"ranks"
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
