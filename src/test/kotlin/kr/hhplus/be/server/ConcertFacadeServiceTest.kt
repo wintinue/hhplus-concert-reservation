@@ -18,8 +18,7 @@ import kr.hhplus.be.server.domain.repository.PointTransactionRepository
 import kr.hhplus.be.server.domain.repository.SeatRepository
 import kr.hhplus.be.server.domain.repository.UserPointRepository
 import kr.hhplus.be.server.queue.QueueService
-import kr.hhplus.be.server.reservation.application.HoldPort
-import kr.hhplus.be.server.reservation.application.ReservationPort
+import kr.hhplus.be.server.reservation.application.ReservationExpirationCoordinator
 import kr.hhplus.be.server.service.ConcertFacadeService
 import io.mockk.every
 import io.mockk.mockk
@@ -47,8 +46,7 @@ class ConcertFacadeServiceTest {
     private val userPointRepository = mockk<UserPointRepository>()
     private val pointTransactionRepository = mockk<PointTransactionRepository>()
     private val queueService = mockk<QueueService>(relaxed = true)
-    private val holdPort = mockk<HoldPort>(relaxed = true)
-    private val reservationPort = mockk<ReservationPort>(relaxed = true)
+    private val reservationExpirationCoordinator = mockk<ReservationExpirationCoordinator>(relaxed = true)
     private val concertCacheService = mockk<ConcertCacheService>()
     private val concertRankingService = mockk<ConcertRankingService>(relaxed = true)
     private val lockExecutor = object : DistributedLockExecutor {
@@ -63,8 +61,7 @@ class ConcertFacadeServiceTest {
         userPointRepository,
         pointTransactionRepository,
         queueService,
-        holdPort,
-        reservationPort,
+        reservationExpirationCoordinator,
         concertCacheService,
         concertRankingService,
         lockExecutor,
@@ -120,6 +117,7 @@ class ConcertFacadeServiceTest {
 
         assertEquals(1, response.items.size)
         assertEquals(1, response.items.first().availableSeat)
+        verify { reservationExpirationCoordinator.cleanupIfDue() }
         verify { queueService.validateQueueTokenForRead("queue-token", 1L, 1L) }
     }
 
@@ -139,6 +137,7 @@ class ConcertFacadeServiceTest {
 
         assertEquals(1, response.items.size)
         assertEquals("AVAILABLE", response.items.first().status)
+        verify { reservationExpirationCoordinator.cleanupIfDue() }
         verify { queueService.validateQueueTokenForRead("queue-token", 1L, 1L) }
     }
 

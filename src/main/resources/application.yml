@@ -24,6 +24,21 @@ spring:
     properties:
       hibernate.timezone.default_storage: NORMALIZE_UTC
       hibernate.jdbc.time_zone: UTC
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
   kafka:
     listener:
       ack-mode: manual_immediate
@@ -54,6 +69,10 @@ app:
     topic:
       reservation-payment: reservation.payment.completed
     consumer-group: hhplus-reservation-data-platform
+  reservation:
+    cleanup:
+      fixed-delay-ms: 30000
+      min-interval-ms: 5000
 
 ---
 spring.config.activate.on-profile: kafka

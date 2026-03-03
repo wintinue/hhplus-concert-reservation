@@ -11,7 +11,16 @@
 - Concurrency Control Report: [`docs/reports/concurrency-control-report.md`](docs/reports/concurrency-control-report.md)
 - Redis Caching Strategy and Performance Report: [`docs/reports/redis-caching-strategy-and-performance-report.md`](docs/reports/redis-caching-strategy-and-performance-report.md)
 - Redis Ranking and Queue Design Report: [`docs/reports/redis-ranking-and-queue-design-report.md`](docs/reports/redis-ranking-and-queue-design-report.md)
+- Reservation Load Test Report: [`docs/reports/reservation-load-test-report.md`](docs/reports/reservation-load-test-report.md)
 - Kafka Report: [`docs/reports/kafka-report.md`](docs/reports/kafka-report.md)
+
+## Operations Docs
+
+- Incident Response Runbook: [`docs/operations/incident-response-runbook.md`](docs/operations/incident-response-runbook.md)
+
+## Presentation Docs
+
+- Reservation Service Operations Presentation Draft: [`docs/presentations/reservation-service-operations-presentation.md`](docs/presentations/reservation-service-operations-presentation.md)
 
 ## Getting Started
 
